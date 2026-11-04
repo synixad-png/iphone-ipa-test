@@ -236,6 +236,7 @@ struct PaintView: View {
     @State private var showClearConfirmation = false
     @State private var exportImage: UIImage?
     @State private var showShare = false
+    @State private var showTools = false
     @State private var canvasSize = CGSize(width: 600, height: 450)
 
     // Only the tool palette scrolls; the drawing canvas never sits inside a ScrollView.
@@ -278,23 +279,57 @@ struct PaintView: View {
                         HStack(alignment: .top, spacing: 14) {
                             drawingPanel
                                 .frame(maxWidth: .infinity, alignment: .top)
-                            ScrollView {
-                                toolsPanel
-                                    .padding(.bottom, 12)
-                            }
-                            .scrollIndicators(.hidden)
-                            .frame(width: min(300, layout.size.width * 0.32))
+                            toolsPanel
+                                .frame(width: min(300, layout.size.width * 0.32),
+                                       alignment: .top)
                         }
                         .frame(maxHeight: .infinity, alignment: .top)
                     } else {
                         drawingPanel
                             .fixedSize(horizontal: false, vertical: true)
-                        ScrollView {
-                            toolsPanel
-                                .padding(.bottom, 15)
+                        HStack(spacing: 8) {
+                            Button {
+                                document.isEraser = false
+                            } label: {
+                                Label("Pędzel", systemImage: "pencil.tip")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(LabChipStyle(active: !document.isEraser))
+                            Button {
+                                document.isEraser = true
+                            } label: {
+                                Label("Gumka", systemImage: "eraser.fill")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(LabChipStyle(active: document.isEraser))
+                            Button {
+                                showTools = true
+                            } label: {
+                                Label("Kolory", systemImage: "paintpalette.fill")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(LabPrimaryButtonStyle())
                         }
-                        .scrollIndicators(.hidden)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .font(.system(size: 11, weight: .semibold))
+                        HStack(spacing: 9) {
+                            Button {
+                                document.undo()
+                            } label: {
+                                Label("Cofnij", systemImage: "arrow.uturn.backward")
+                                    .frame(maxWidth: .infinity, minHeight: 39)
+                            }
+                            .disabled(!document.canUndo)
+                            Button {
+                                document.redo()
+                            } label: {
+                                Label("Ponów", systemImage: "arrow.uturn.forward")
+                                    .frame(maxWidth: .infinity, minHeight: 39)
+                            }
+                            .disabled(!document.canRedo)
+                        }
+                        .buttonStyle(LabChipStyle(active: false))
+                        .font(.system(size: 11, weight: .semibold))
+                        Spacer(minLength: 0)
                     }
                 }
                 .padding(.horizontal, wide ? 24 : 12)
@@ -306,6 +341,23 @@ struct PaintView: View {
         }
         .foregroundStyle(.white)
         .tint(LabStyle.accent)
+        .sheet(isPresented: $showTools) {
+            NavigationStack {
+                ScrollView {
+                    toolsPanel
+                        .padding(14)
+                }
+                .background(LabStyle.background)
+                .navigationTitle("Narzędzia PAINT")
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Gotowe") { showTools = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(.dark)
+        }
         .sheet(isPresented: $showShare) {
             if let exportImage {
                 PaintShareSheet(image: exportImage)
