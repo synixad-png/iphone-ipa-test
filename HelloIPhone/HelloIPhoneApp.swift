@@ -370,6 +370,14 @@ final class AsteroidsArcadeScene: SKScene {
         for star in stars { star.removeFromParent() }
         stars.removeAll()
         guard size.width > 0 && size.height > 0 else { return }
+        // Keep the ship inside the new playfield after iPad split-view or rotation.
+        if oldSize.width > 0 && oldSize.height > 0 && ship.parent != nil {
+            ship.position = CGPoint(
+                x: min(size.width, max(0, ship.position.x * size.width / oldSize.width)),
+                y: min(size.height, max(0, ship.position.y * size.height / oldSize.height))
+            )
+            shieldRing.position = ship.position
+        }
         for _ in 0..<80 {
             let dot = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.45...1.3))
             dot.fillColor = .white.withAlphaComponent(CGFloat.random(in: 0.18...0.68))
@@ -707,6 +715,8 @@ struct ArcadeHoldButton: View {
     let symbol: String
     let title: String
     let action: (Bool) -> Void
+    var buttonWidth: CGFloat = 72
+    var buttonHeight: CGFloat = 65
     @State private var pressed = false
 
     var body: some View {
@@ -715,7 +725,7 @@ struct ArcadeHoldButton: View {
             Text(title).font(.caption2.bold())
         }
         .foregroundStyle(pressed ? .black : .white)
-        .frame(width: 72, height: 65)
+        .frame(width: buttonWidth, height: buttonHeight)
         .background(pressed ? Color.cyan : Color.white.opacity(0.13),
                     in: RoundedRectangle(cornerRadius: 15))
         .contentShape(RoundedRectangle(cornerRadius: 15))
@@ -739,12 +749,25 @@ struct AsteroidsGameView: View {
                     .ignoresSafeArea(edges: .bottom)
                 VStack(spacing: 10) {
                     Spacer()
-                    HStack(spacing: 7) {
-                        ArcadeHoldButton(symbol: "arrow.counterclockwise", title: "LEWO") { scene.turnLeft = $0 }
-                        ArcadeHoldButton(symbol: "arrow.clockwise", title: "PRAWO") { scene.turnRight = $0 }
-                        ArcadeHoldButton(symbol: "flame.fill", title: "CIĄG") { scene.accelerating = $0 }
-                        ArcadeHoldButton(symbol: "scope", title: "OGIEŃ") { scene.shooting = $0 }
+                    HStack(spacing: geo.size.width >= 700 ? 20 : 7) {
+                        ArcadeHoldButton(symbol: "arrow.counterclockwise", title: "LEWO",
+                                         action: { scene.turnLeft = $0 },
+                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
+                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
+                        ArcadeHoldButton(symbol: "arrow.clockwise", title: "PRAWO",
+                                         action: { scene.turnRight = $0 },
+                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
+                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
+                        ArcadeHoldButton(symbol: "flame.fill", title: "CIĄG",
+                                         action: { scene.accelerating = $0 },
+                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
+                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
+                        ArcadeHoldButton(symbol: "scope", title: "OGIEŃ",
+                                         action: { scene.shooting = $0 },
+                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
+                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 8)
                     HStack {
                         Button {
