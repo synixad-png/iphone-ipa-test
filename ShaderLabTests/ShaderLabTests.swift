@@ -74,7 +74,7 @@ final class ShaderLabTests: XCTestCase {
         arcadeController.loadViewIfNeeded()
         XCTAssertNotNil(arcadeController.view)
         let doom = DoomLandscapeView(frame: nil, move: { _ in }, aim: { _ in },
-                                     interact: { _ in }, menu: { _ in }, close: {})
+                                     interact: { _ in }, fire: { _ in }, menu: { _ in }, close: {})
         let doomController = UIHostingController(rootView: doom)
         doomController.loadViewIfNeeded()
         XCTAssertNotNil(doomController.view)
