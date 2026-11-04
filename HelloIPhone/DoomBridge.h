@@ -11,6 +11,12 @@ int doom_bridge_status(void);
 int doom_bridge_copy(uint32_t *destination, int maximum_pixels);
 void doom_bridge_key(int code, int pressed);
 void doom_bridge_pause(int paused);
+void doom_audio_set_paused(int paused);
+void doom_audio_set_volume(float volume);
+int doom_audio_is_active(void);
+unsigned int doom_audio_played_count(void);
+unsigned int doom_audio_callback_count(void);
+int doom_audio_selftest(void);
 #ifdef __cplusplus
 }
 #endif
