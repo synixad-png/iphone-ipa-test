@@ -17,7 +17,7 @@ permissions:
 jobs:
   build-ipa:
     if: ${{ github.event.repository.private == false }}
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
