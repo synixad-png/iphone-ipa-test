@@ -404,7 +404,6 @@ struct ShaderLabView: View {
     @State private var roughness = 0.18
     @State private var spinning = true
     @State private var selectedColor = 0
-    @State private var showKnotPicker = false
     @State private var knotRevision = 0
     @State private var knotError: String?
     @State private var showGLBImporter = false
@@ -489,12 +488,6 @@ struct ShaderLabView: View {
             if ShaderScene.imported == nil && FileManager.default.fileExists(atPath: savedGLBURL.path) {
                 loadImported(savedGLBURL, filename: UserDefaults.standard.string(forKey: "shaderlab.importedFilename") ?? savedGLBName)
             }
-            if ShaderScene.knot == nil && FileManager.default.fileExists(atPath: GLBKnot.saved.path) {
-                if let model = try? GLBKnot.parse(GLBKnot.saved) {
-                    ShaderScene.knot = model
-                    knotRevision += 1
-                }
-            }
         }
         .fileImporter(isPresented: $showGLBImporter, allowedContentTypes: [UTType(filenameExtension: "glb") ?? .data, .data]) { result in
             do {
@@ -537,19 +530,6 @@ struct ShaderLabView: View {
             } catch {
                 knotError = "Nie można otworzyć pliku: \(error.localizedDescription)"
             }
-        }
-                .fileImporter(isPresented: $showKnotPicker, allowedContentTypes: [.data, .item]) { result in
-            do {
-                let source = try result.get()
-                let access = source.startAccessingSecurityScopedResource()
-                defer { if access { source.stopAccessingSecurityScopedResource() } }
-                let model = try GLBKnot.parse(source)
-                let dest = GLBKnot.saved
-                if FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.removeItem(at: dest) }
-                try FileManager.default.copyItem(at: source, to: dest)
-                ShaderScene.knot = model
-                knotRevision += 1
-            } catch { knotError = "Nie udało się odczytać GLB: \(error.localizedDescription)" }
         }
         .alert("Model GLB", isPresented: Binding(get: { knotError != nil }, set: { if !$0 { knotError = nil } })) {
             Button("OK") { knotError = nil }
@@ -594,13 +574,13 @@ struct ShaderLabView: View {
     @ViewBuilder private func settingsPanel(wide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
-                LabSectionTitle(title: "BIBLIOTEKA MODELI", symbol: "square.stack.3d.up")
+                LabSectionTitle(title: "MODELE 3D", symbol: "square.stack.3d.up")
+                Text("Wybierz gotową bryłę albo wczytaj własny model GLB z teksturami i animacjami.")
+                    .font(.caption).foregroundStyle(LabStyle.muted)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: wide ? 142 : 132), spacing: 8)], spacing: 8) {
-                    ForEach(Shape3D.allCases) { item in
+                    ForEach(Shape3D.allCases.filter { $0 != .knot && $0 != .imported }) { item in
                         Button {
                             shape = item
-                            if item == .knot && ShaderScene.knot == nil { showKnotPicker = true }
-                            if item == .imported && ShaderScene.imported == nil { showGLBImporter = true }
                         } label: {
                             HStack(spacing: 7) {
                                 Image(systemName: item == .imported ? "square.and.arrow.down" : "cube")
@@ -616,23 +596,10 @@ struct ShaderLabView: View {
                         .accessibilityAddTraits(shape == item ? .isSelected : [])
                     }
                 }
-                if shape == .knot {
-                    Button {
-                        showKnotPicker = true
-                    } label: {
-                        Label(ShaderScene.knot == nil ? "Wczytaj chromowy węzeł GLB" : "Podmień chromowy węzeł",
-                              systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(LabPrimaryButtonStyle())
-                    if ShaderScene.knot == nil {
-                        Text("Wybierz plik chromowego węzła GLB w aplikacji Pliki.")
-                            .font(.caption).foregroundStyle(LabStyle.muted)
-                    }
-                }
                 Button {
                     showGLBImporter = true
                 } label: {
-                    Label(importing ? "Wczytywanie modelu..." : "Importuj własny plik GLB",
+                    Label(importing ? "Wczytywanie modelu..." : "OTWÓRZ JEDEN PLIK GLB",
                           systemImage: "square.and.arrow.down.on.square")
                 }
                 .buttonStyle(LabPrimaryButtonStyle())
