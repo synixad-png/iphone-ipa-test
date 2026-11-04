@@ -284,7 +284,7 @@ struct ShaderLabView: View {
                     Picker("Scena światła", selection: $lightPreset) {
                         ForEach(LightPreset.allCases) { preset in Text(preset.rawValue).tag(preset) }
                     }.pickerStyle(.menu).tint(.white)
-                    HStack { Text("Moc lamp"); Spacer(); Text("\\(Int(lightPower * 100))%") }
+                    HStack { Text("Moc lamp"); Spacer(); Text("\(Int(lightPower * 100))%") }
                         .font(.subheadline)
                     Slider(value: $lightPower, in: 0...2).tint(.cyan)
                     Text("Efekty siatki, neonu, szkła i ceramiki są oddzielne od modelu cieniowania. Neon to materiał emisyjny, bez dodatkowego bloom; szkło wykorzystuje przezroczystość, bez ray tracingu.")
