@@ -5,6 +5,7 @@
 extern "C" {
 #endif
 // Native doomgeneric framebuffer and keyboard bridge (GPL-2.0 compatible).
+int doom_bridge_extract_shareware_zip(const char *zip_path, const char *wad_path);
 int doom_bridge_start(const char *wad_path);
 int doom_bridge_status(void);
 int doom_bridge_copy(uint32_t *destination, int maximum_pixels);
