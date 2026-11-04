@@ -1169,6 +1169,7 @@ final class AsteroidsArcadeScene: SKScene {
     }
 }
 
+
 struct ArcadeHoldButton: View {
     let symbol: String
     let title: String
@@ -1179,14 +1180,18 @@ struct ArcadeHoldButton: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: symbol).font(.title2.bold())
-            Text(title).font(.caption2.bold())
+            Image(systemName: symbol)
+                .font(.system(size: buttonHeight >= 70 ? 23 : 19, weight: .bold))
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
         }
-        .foregroundStyle(pressed ? .black : .white)
+        .foregroundStyle(pressed ? LabStyle.background : Color.white)
         .frame(width: buttonWidth, height: buttonHeight)
-        .background(pressed ? Color.cyan : Color.white.opacity(0.13),
-                    in: RoundedRectangle(cornerRadius: 15))
-        .contentShape(RoundedRectangle(cornerRadius: 15))
+        .background(pressed ? LabStyle.accent : LabStyle.panel,
+                    in: RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13)
+            .strokeBorder(pressed ? LabStyle.accent : LabStyle.border, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 13))
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { _ in
                 if !pressed { pressed = true; action(true) }
@@ -1201,58 +1206,116 @@ struct AsteroidsGameView: View {
 
     var body: some View {
         GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                Color(red: 0.02, green: 0.03, blue: 0.08).ignoresSafeArea()
-                SpriteView(scene: scene, options: [.ignoresSiblingOrder])
-                    .ignoresSafeArea(edges: .bottom)
-                VStack(spacing: 10) {
-                    Spacer()
-                    HStack(spacing: geo.size.width >= 700 ? 20 : 7) {
-                        ArcadeHoldButton(symbol: "arrow.counterclockwise", title: "LEWO",
-                                         action: { scene.turnLeft = $0 },
-                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
-                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
-                        ArcadeHoldButton(symbol: "arrow.clockwise", title: "PRAWO",
-                                         action: { scene.turnRight = $0 },
-                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
-                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
-                        ArcadeHoldButton(symbol: "flame.fill", title: "CIĄG",
-                                         action: { scene.accelerating = $0 },
-                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
-                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
-                        ArcadeHoldButton(symbol: "scope", title: "OGIEŃ",
-                                         action: { scene.shooting = $0 },
-                                         buttonWidth: geo.size.width >= 700 ? 100 : 72,
-                                         buttonHeight: geo.size.width >= 700 ? 80 : 65)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 8)
-                    HStack {
-                        Button {
-                            scene.activateBoost()
-                        } label: {
-                            Label("DOPALACZ (6 s)", systemImage: "bolt.fill")
-                                .font(.caption.bold())
-                                .padding(.horizontal, 16).padding(.vertical, 11)
-                                .background(Color.orange.opacity(0.25), in: Capsule())
+            let wide = geo.size.width >= 700
+            let compact = geo.size.height < 600
+            let keyHeight: CGFloat = compact ? 54 : (wide ? 78 : 62)
+            let keyWidth: CGFloat = wide ? 105 : max(62, min(86, (geo.size.width - 62) / 4))
+            let gap: CGFloat = wide ? 16 : 8
+            ZStack {
+                LabStyle.background.ignoresSafeArea()
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "gamecontroller.fill")
+                            .foregroundStyle(LabStyle.accent)
+                            .frame(width: 36, height: 36)
+                            .background(LabStyle.accent.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 10))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("ASTEROIDS")
+                                .font(.system(size: wide ? 23 : 19, weight: .bold, design: .rounded))
+                            Text("ARCADE · SURVIVAL")
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(LabStyle.muted)
                         }
-                        .foregroundStyle(.orange)
                         Spacer()
-                        Text("S: OSŁONA  R: SZYBKI OGIEŃ  +: ŻYCIE")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }.padding(.horizontal, 12)
-                    .padding(.bottom, 8)
-                    Button("NOWA GRA") { scene.restart() }
-                        .font(.caption.bold())
-                        .foregroundStyle(.cyan)
-                        .padding(.bottom, 4)
+                        Button {
+                            scene.turnLeft = false
+                            scene.turnRight = false
+                            scene.accelerating = false
+                            scene.shooting = false
+                            scene.restart()
+                        } label: {
+                            Label("Od nowa", systemImage: "arrow.clockwise")
+                                .font(.system(size: 12, weight: .semibold))
+                                .padding(.horizontal, 12)
+                                .frame(height: 38)
+                        }
+                        .foregroundStyle(LabStyle.accent)
+                        .background(LabStyle.panel, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(LabStyle.border))
+                        .accessibilityLabel("Rozpocznij nową grę")
+                    }
+                    .padding(.horizontal, wide ? 24 : 14)
+                    .padding(.vertical, compact ? 6 : 10)
+                    .frame(maxWidth: 1100)
+                    .frame(maxWidth: .infinity)
+
+                    SpriteView(scene: scene, options: [.ignoresSiblingOrder])
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(red: 0.018, green: 0.025, blue: 0.065))
+                        .overlay(alignment: .bottomLeading) {
+                            if !compact {
+                                Text("PRZETRWAJ JAK NAJDŁUŻEJ · ZBIERAJ BONUSY")
+                                    .font(.system(size: wide ? 11 : 9, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(LabStyle.muted)
+                                    .padding(.leading, 12).padding(.bottom, 9)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .overlay(Rectangle().strokeBorder(LabStyle.border, lineWidth: 1))
+                        .accessibilityLabel("Pole rozgrywki ASTEROIDS")
+
+                    VStack(spacing: compact ? 6 : 10) {
+                        HStack(spacing: gap) {
+                            ArcadeHoldButton(symbol: "arrow.counterclockwise", title: "LEWO",
+                                             action: { scene.turnLeft = $0 },
+                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
+                            ArcadeHoldButton(symbol: "arrow.clockwise", title: "PRAWO",
+                                             action: { scene.turnRight = $0 },
+                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
+                            ArcadeHoldButton(symbol: "flame.fill", title: "CIĄG",
+                                             action: { scene.accelerating = $0 },
+                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
+                            ArcadeHoldButton(symbol: "scope", title: "OGIEŃ",
+                                             action: { scene.shooting = $0 },
+                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        HStack(spacing: 10) {
+                            Button {
+                                scene.activateBoost()
+                            } label: {
+                                Label("DOPALACZ", systemImage: "bolt.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .frame(minWidth: 110, minHeight: compact ? 34 : 42)
+                                    .padding(.horizontal, 12)
+                                    .background(Color.orange.opacity(0.16),
+                                                in: RoundedRectangle(cornerRadius: 11))
+                                    .overlay(RoundedRectangle(cornerRadius: 11)
+                                        .strokeBorder(Color.orange.opacity(0.45)))
+                            }
+                            .foregroundStyle(.orange)
+                            Spacer(minLength: 0)
+                            Text(wide ? "S · osłona    R · szybki ogień    + · życie" : "S · osłona   R · ogień   + · życie")
+                                .font(.system(size: wide ? 11 : 9, weight: .medium))
+                                .foregroundStyle(LabStyle.muted)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.78)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        .frame(maxWidth: wide ? 620 : 450)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, compact ? 7 : 11)
+                    .padding(.bottom, compact ? 7 : 12)
+                    .frame(maxWidth: .infinity)
+                    .background(LabStyle.background)
                 }
-                .padding(.bottom, max(geo.safeAreaInsets.bottom, 4))
+                .foregroundStyle(.white)
             }
         }
-        .navigationTitle("ASTEROIDS")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarHidden(true)
         .onDisappear {
             scene.turnLeft = false
             scene.turnRight = false
