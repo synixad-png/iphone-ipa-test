@@ -1,72 +1,235 @@
 import SwiftUI
+import SceneKit
+import Metal
 
 @main
 struct HelloIPhoneApp: App {
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        WindowGroup { ShaderLabView() }
+    }
+}
+
+enum Shape3D: String, CaseIterable, Identifiable {
+    case sphere = "Kula", cube = "Sześcian", torus = "Torus", cone = "Stożek", cylinder = "Walec", pyramid = "Ostrosłup", capsule = "Kapsuła"
+    var id: String { rawValue }
+    var geometry: SCNGeometry {
+        switch self {
+        case .sphere:
+            let g = SCNSphere(radius: 1.0); g.segmentCount = 64; return g
+        case .cube: return SCNBox(width: 1.6, height: 1.6, length: 1.6, chamferRadius: 0.12)
+        case .torus: return SCNTorus(ringRadius: 0.8, pipeRadius: 0.3)
+        case .cone:
+            let g = SCNCone(topRadius: 0, bottomRadius: 0.9, height: 1.9); g.radialSegmentCount = 64; return g
+        case .cylinder: return SCNCylinder(radius: 0.8, height: 1.8)
+        case .pyramid: return SCNPyramid(width: 1.8, height: 1.9, length: 1.8)
+        case .capsule: return SCNCapsule(capRadius: 0.7, height: 2)
         }
     }
 }
 
-struct ContentView: View {
-    @AppStorage("tapCount") private var tapCount = 0
-    @State private var showResetConfirmation = false
+enum Shading3D: String, CaseIterable, Identifiable {
+    case pbr = "PBR / metal", phong = "Phong / połysk", blinn = "Blinn", lambert = "Lambert / mat", constant = "Bez cieniowania"
+    var id: String { rawValue }
+    var lighting: SCNMaterial.LightingModel {
+        switch self {
+        case .pbr: return .physicallyBased
+        case .phong: return .phong
+        case .blinn: return .blinn
+        case .lambert: return .lambert
+        case .constant: return .constant
+        }
+    }
+}
 
+enum ShaderScene {
+    static let background = UIColor(red: 0.035, green: 0.055, blue: 0.1, alpha: 1)
+    static let environment: UIImage = {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: 1024, height: 512), format: format).image { ctx in
+            let c = ctx.cgContext
+            let colors = [UIColor(white: 0.32, alpha: 1).cgColor, UIColor(white: 0.06, alpha: 1).cgColor] as CFArray
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1])!
+            c.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: 512), options: [])
+            UIColor(white: 1, alpha: 1).setFill(); c.fill(CGRect(x: 100, y: 80, width: 100, height: 290))
+            UIColor(red: 0.35, green: 0.75, blue: 1, alpha: 1).setFill(); c.fill(CGRect(x: 690, y: 140, width: 170, height: 90))
+            UIColor(white: 0.7, alpha: 1).setFill(); c.fill(CGRect(x: 350, y: 20, width: 300, height: 35))
+        }
+    }()
+
+    static func material(_ shading: Shading3D, color: UIColor, metalness: Double, roughness: Double) -> SCNMaterial {
+        let m = SCNMaterial()
+        m.lightingModel = shading.lighting
+        m.diffuse.contents = color
+        m.specular.contents = UIColor(white: 0.8, alpha: 1)
+        m.metalness.contents = NSNumber(value: metalness)
+        m.roughness.contents = NSNumber(value: roughness)
+        m.shininess = 0.55
+        m.isDoubleSided = false
+        // SceneKit constant includes ambient by default. Zero it to obtain true unlit.
+        m.locksAmbientWithDiffuse = false
+        m.ambient.contents = shading == .constant ? UIColor.black : color
+        return m
+    }
+
+    static func makeScene(shape: Shape3D = .sphere, shading: Shading3D = .pbr,
+                          color: UIColor = .systemBlue, metalness: Double = 0.85,
+                          roughness: Double = 0.18) -> SCNScene {
+        let scene = SCNScene()
+        scene.background.contents = background
+        scene.lightingEnvironment.contents = environment
+        scene.lightingEnvironment.intensity = 1
+        let camera = SCNCamera()
+        camera.fieldOfView = 48
+        camera.zNear = 0.05; camera.zFar = 100
+        camera.wantsHDR = true
+        camera.wantsExposureAdaptation = false
+        let cameraNode = SCNNode(); cameraNode.name = "camera"; cameraNode.camera = camera
+        cameraNode.position = SCNVector3(0, 0.5, 4.7)
+        cameraNode.look(at: SCNVector3Zero)
+        scene.rootNode.addChildNode(cameraNode)
+        let key = SCNNode(); key.name = "key"
+        key.light = SCNLight(); key.light?.type = .omni; key.light?.intensity = 1000
+        key.light?.color = UIColor.white; key.position = SCNVector3(-3, 4, 5)
+        scene.rootNode.addChildNode(key)
+        let rim = SCNNode(); rim.name = "rim"
+        rim.light = SCNLight(); rim.light?.type = .omni; rim.light?.intensity = 650
+        rim.light?.color = UIColor.cyan; rim.position = SCNVector3(3, 2, -3)
+        scene.rootNode.addChildNode(rim)
+        let fill = SCNNode(); fill.name = "fill"
+        fill.light = SCNLight(); fill.light?.type = .ambient; fill.light?.intensity = 100
+        scene.rootNode.addChildNode(fill)
+        let model = SCNNode(); model.name = "model"
+        model.eulerAngles = SCNVector3(-0.15, 0.35, 0)
+        scene.rootNode.addChildNode(model)
+        update(scene, shape: shape, shading: shading, color: color, metalness: metalness, roughness: roughness, spinning: false)
+        return scene
+    }
+
+    static func update(_ scene: SCNScene, shape: Shape3D, shading: Shading3D,
+                       color: UIColor, metalness: Double, roughness: Double, spinning: Bool) {
+        guard let model = scene.rootNode.childNode(withName: "model", recursively: false) else { return }
+        let shapeID = "shape:" + shape.rawValue
+        if model.geometry?.name != shapeID {
+            model.geometry = shape.geometry
+            model.geometry?.name = shapeID
+        }
+        model.geometry?.materials = [material(shading, color: color, metalness: metalness, roughness: roughness)]
+        if spinning && model.action(forKey: "spin") == nil {
+            model.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 9)), forKey: "spin")
+        } else if !spinning {
+            model.removeAction(forKey: "spin")
+        }
+    }
+
+    static func makeView() -> SCNView {
+        let view = SCNView(frame: .zero, options: [SCNView.Option.preferredRenderingAPI.rawValue: SCNRenderingAPI.metal.rawValue])
+        view.scene = makeScene()
+        view.backgroundColor = background
+        view.allowsCameraControl = true
+        view.defaultCameraController.target = SCNVector3Zero
+        view.defaultCameraController.minimumVerticalAngle = -85
+        view.defaultCameraController.maximumVerticalAngle = 85
+        view.autoenablesDefaultLighting = false
+        view.antialiasingMode = .multisampling4X
+        view.preferredFramesPerSecond = 60
+        view.pointOfView = view.scene?.rootNode.childNode(withName: "camera", recursively: false)
+        return view
+    }
+}
+
+struct ModelView: UIViewRepresentable {
+    let shape: Shape3D
+    let shading: Shading3D
+    let metalness: Double
+    let roughness: Double
+    let spinning: Bool
+    let color: UIColor
+
+    func makeUIView(context: Context) -> SCNView { ShaderScene.makeView() }
+    func updateUIView(_ view: SCNView, context: Context) {
+        guard let scene = view.scene else { return }
+        ShaderScene.update(scene, shape: shape, shading: shading, color: color,
+                           metalness: metalness, roughness: roughness, spinning: spinning)
+        view.isPlaying = spinning
+        view.rendersContinuously = spinning
+    }
+}
+
+struct ShaderLabView: View {
+    @State private var shape: Shape3D = .sphere
+    @State private var shading: Shading3D = .pbr
+    @State private var metalness = 0.85
+    @State private var roughness = 0.18
+    @State private var spinning = true
+    @State private var selectedColor = 0
+    private let swatches: [(String, UIColor, Color)] = [
+        ("Tytan", UIColor(red: 0.72, green: 0.80, blue: 0.92, alpha: 1), .init(red: 0.72, green: 0.80, blue: 0.92)),
+        ("Miedź", UIColor(red: 0.95, green: 0.45, blue: 0.22, alpha: 1), .orange),
+        ("Szmaragd", UIColor(red: 0.08, green: 0.85, blue: 0.58, alpha: 1), .green),
+        ("Fiolet", UIColor(red: 0.58, green: 0.35, blue: 0.95, alpha: 1), .purple)
+    ]
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.04, green: 0.08, blue: 0.18), Color(red: 0.12, green: 0.2, blue: 0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
-            VStack(spacing: 24) {
-                Image(systemName: "iphone.gen3.radiowaves.left.and.right")
-                    .font(.system(size: 66, weight: .light))
-                    .foregroundStyle(.cyan)
-                Text("Mój pierwszy IPA")
-                    .font(.largeTitle.bold())
-                    .multilineTextAlignment(.center)
-                Text("Natywna aplikacja iPhone • SwiftUI")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.7))
-                VStack(spacing: 12) {
-                    Text("LICZNIK KLIKNIĘĆ")
-                        .font(.caption.bold())
-                        .tracking(2)
-                        .foregroundStyle(.white.opacity(0.6))
-                    Text("\(tapCount)")
-                        .font(.system(size: 76, weight: .bold, design: .rounded))
-                        .contentTransition(.opacity)
-                    Button {
-                        withAnimation(.spring()) { tapCount += 1 }
-                    } label: {
-                        Label("Naciśnij mnie", systemImage: "hand.tap.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
+            Color(red: 0.035, green: 0.055, blue: 0.10).ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("SHADER LAB 3D").font(.title2.bold()).tracking(1.2)
+                            Text("Natywny podgląd 3D · SceneKit").font(.caption).foregroundStyle(.cyan)
+                        }
+                        Spacer()
+                        Image(systemName: "cube.transparent.fill").font(.title).foregroundStyle(.cyan)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.cyan)
-                    .foregroundStyle(.black)
-                    Button("Wyzeruj licznik") { showResetConfirmation = true }
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.8))
+                    ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness, spinning: spinning, color: swatches[selectedColor].1)
+                        .frame(height: 315)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.12)))
+                    Text("Przeciągnij palcem, aby obracać · uszczypnij, aby przybliżyć lub oddalić").font(.caption2).foregroundStyle(.white.opacity(0.7))
+                    Text("BRYŁA").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Shape3D.allCases) { item in
+                                Button(item.rawValue) { shape = item }
+                                    .padding(.horizontal, 12).padding(.vertical, 9)
+                                    .background(shape == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
+                                    .foregroundStyle(shape == item ? .black : .white)
+                            }
+                        }
+                    }
+                    Text("MODEL CIENIOWANIA").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
+                    Picker("Cieniowanie", selection: $shading) {
+                        ForEach(Shading3D.allCases) { item in Text(item.rawValue).tag(item) }
+                    }.pickerStyle(.menu).tint(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10).background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                    HStack(spacing: 14) {
+                        ForEach(swatches.indices, id: \.self) { index in
+                            Button { selectedColor = index } label: {
+                                Circle().fill(swatches[index].2).frame(width: 33, height: 33)
+                                    .overlay(Circle().stroke(.white, lineWidth: selectedColor == index ? 3 : 0))
+                            }.accessibilityLabel(swatches[index].0)
+                        }
+                        Spacer()
+                        Toggle("Obrót", isOn: $spinning).tint(.cyan).fixedSize()
+                    }
+                    VStack(spacing: 12) {
+                        HStack { Text("Metaliczność"); Spacer(); Text("\(Int(metalness * 100))%") }
+                        Slider(value: $metalness, in: 0...1).tint(.cyan)
+                        HStack { Text("Chropowatość"); Spacer(); Text("\(Int(roughness * 100))%") }
+                        Slider(value: $roughness, in: 0...1).tint(.cyan)
+                    }
+                    .font(.subheadline)
+                    .disabled(shading != .pbr)
+                    Text("Metaliczność i chropowatość wpływają na PBR. Modele Phong, Blinn i Lambert wykorzystują własne równania oświetlenia; tryb stały nie reaguje na światło. PBR wykorzystuje Metal i mapę otoczenia do odbić.")
+                        .font(.caption).foregroundStyle(.white.opacity(0.68))
+                    Text("SHADER LAB 3D · iOS 16+ · v1.0")
+                        .font(.caption2.monospaced()).foregroundStyle(.white.opacity(0.45)).frame(maxWidth: .infinity)
                 }
-                .padding(24)
-                .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 24))
-                Text("Wynik zapisuje się na iPhonie i pozostaje po zamknięciu aplikacji.")
-                    .font(.footnote)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.65))
-                Spacer(minLength: 0)
-                Text("TEST IPA • wersja 1.0")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.white)
+                .padding(18)
             }
-            .foregroundStyle(.white)
-            .padding(26)
         }
-        .confirmationDialog("Wyzerować licznik?", isPresented: $showResetConfirmation) {
-            Button("Wyzeruj", role: .destructive) { tapCount = 0 }
-            Button("Anuluj", role: .cancel) { }
-        }
+        .preferredColorScheme(.dark)
     }
 }

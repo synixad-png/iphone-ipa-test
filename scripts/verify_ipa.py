@@ -15,7 +15,7 @@ with zipfile.ZipFile(path) as z:
     assert len(apps) == 1, "IPA musi zawierac jedna aplikacje"
     info = plistlib.loads(z.read(apps[0]))
     assert info["CFBundlePackageType"] == "APPL"
-    assert info["CFBundleIdentifier"] == "app.synix.helloiphone.test"
+    assert info["CFBundleIdentifier"] == "app.synix.shaderlab3d"
     assert info["CFBundleSupportedPlatforms"] == ["iPhoneOS"]
     assert info["UIDeviceFamily"] == [1]
     root = apps[0].removesuffix("Info.plist")

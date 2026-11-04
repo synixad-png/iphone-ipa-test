@@ -1,9 +1,10 @@
-name: Buduj testowy IPA (bez platnego konta Apple)
+name: SHADER LAB 3D - build iPhone IPA and render tests
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths-ignore: ['*.md', 'README.txt']
 
 permissions:
   contents: write
@@ -11,72 +12,85 @@ permissions:
 jobs:
   build-ipa:
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
-      - name: Pobierz projekt
-        uses: actions/checkout@v4
-      - name: Wersja Xcode
-        run: xcodebuild -version
-      - name: Sprawdz projekt i wspoldzielony schemat
+      - uses: actions/checkout@v4
+      - name: Check Xcode project and environment
+        shell: bash
         run: |
+          set -euo pipefail
+          mkdir -p dist
+          { xcodebuild -version; sw_vers; xcodebuild -showsdks; } | tee dist/build-environment.txt
           plutil -lint HelloIPhone.xcodeproj/project.pbxproj
           xcodebuild -list -project HelloIPhone.xcodeproj
-      - name: Kompiluj natywna aplikacje iPhone (bez podpisu)
+      - name: Build ARM64 for physical iPhone without signing
         shell: bash
         run: |
           set -euo pipefail
-          xcodebuild \
-            -project HelloIPhone.xcodeproj \
-            -scheme HelloIPhone \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            ARCHS=arm64 \
-            ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
-      - name: Spakuj IPA dla Sideloadly
+          xcodebuild -project HelloIPhone.xcodeproj -scheme HelloIPhone \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DeviceBuild" ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build | tee dist/device-build.log
+      - name: Package and verify unsigned IPA
         shell: bash
         run: |
           set -euo pipefail
-          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/HelloIPhone.app"
-          test -d "$APP"
           mkdir -p dist/Payload
-          ditto "$APP" dist/Payload/HelloIPhone.app
-          cd dist
-          /usr/bin/zip -qry HelloIPhone_unsigned.ipa Payload
-          /usr/bin/unzip -t HelloIPhone_unsigned.ipa | tail -1
-          test -s HelloIPhone_unsigned.ipa
-      - name: Zweryfikuj IPA, ARM64 i platforme iOS
+          ditto "$RUNNER_TEMP/DeviceBuild/Build/Products/Release-iphoneos/HelloIPhone.app" dist/Payload/HelloIPhone.app
+          (cd dist && zip -qry SHADER_LAB_3D_v1_unsigned.ipa Payload)
+          python3 scripts/verify_ipa.py dist/SHADER_LAB_3D_v1_unsigned.ipa | tee dist/verification.json
+          shasum -a 256 dist/SHADER_LAB_3D_v1_unsigned.ipa | tee dist/SHA256SUMS.txt
+      - name: Boot an available iPhone simulator
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/verify_ipa.py dist/HelloIPhone_unsigned.ipa | tee dist/verification.json
-          shasum -a 256 dist/HelloIPhone_unsigned.ipa | tee dist/SHA256SUMS.txt
-      - name: Udostepnij IPA do pobrania
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/devices.json"
+          SIM_UDID=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(next(v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if "iPhone" in v["name"]))' "$RUNNER_TEMP/devices.json")
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM_UDID"
+          xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: XCTest - all 35 renders, five modes, PBR controls, unlit and camera
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild test -project HelloIPhone.xcodeproj -scheme HelloIPhone \
+            -configuration Debug -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/SimulatorBuild" \
+            -resultBundlePath "$RUNNER_TEMP/ShaderLabTests.xcresult" \
+            -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO | tee dist/simulator-tests.log
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/ShaderLabTests.xcresult" > dist/test-summary.json
+          DATA_DIR=$(xcrun simctl get_app_container "$SIM_UDID" app.synix.shaderlab3d data)
+          ditto "$DATA_DIR/Documents/ShaderLabEvidence" dist/RenderEvidence
+          xcrun simctl launch --terminate-running-process "$SIM_UDID" app.synix.shaderlab3d
+          sleep 3
+          xcrun simctl io "$SIM_UDID" screenshot dist/App-Simulator.png
+      - name: Package sources and test evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output=dist/SHADER_LAB_3D_v1_ZRODLA.zip HEAD
+          (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png test-summary.json simulator-tests.log device-build.log build-environment.txt verification.json SHA256SUMS.txt)
+      - name: Upload GitHub Actions artifact
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: HelloIPhone_unsigned_IPA
+          name: SHADER_LAB_3D_v1_IPA_SOURCES_TESTS
           path: |
-            dist/HelloIPhone_unsigned.ipa
-            dist/verification.json
-            dist/SHA256SUMS.txt
+            dist/SHADER_LAB_3D_v1_unsigned.ipa
+            dist/SHADER_LAB_3D_v1_ZRODLA.zip
+            dist/SHADER_LAB_3D_v1_TESTY.zip
           if-no-files-found: error
           retention-days: 7
-      - name: Zapisz IPA w prywatnym wydaniu repozytorium
+      - name: Save verified files in this private repository release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cd dist
-          zip -q HelloIPhone_unsigned_IPA.zip HelloIPhone_unsigned.ipa verification.json SHA256SUMS.txt
-          gh release create "ipa-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "Testowy IPA — build ${GITHUB_RUN_NUMBER}" \
-            --notes "Niepodpisana aplikacja SwiftUI dla fizycznego iPhone, ARM64, iOS 16+. Zweryfikowano strukturę IPA i SHA-256. Instalacja wymaga podpisania, np. przez Sideloadly." \
-            HelloIPhone_unsigned.ipa HelloIPhone_unsigned_IPA.zip verification.json SHA256SUMS.txt
+          gh release create "shader-lab-v1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title 'SHADER LAB 3D v1 — IPA, sources and tests' \
+            --notes 'Unsigned ARM64 iPhone application, iOS 16+. Built on macOS. Includes XCTest render evidence, sources and SHA-256. Physical-device installation is not tested; sign with Sideloadly.' \
+            dist/SHADER_LAB_3D_v1_unsigned.ipa dist/SHADER_LAB_3D_v1_ZRODLA.zip \
+            dist/SHADER_LAB_3D_v1_TESTY.zip dist/verification.json dist/SHA256SUMS.txt dist/test-summary.json

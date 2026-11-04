@@ -5,7 +5,9 @@
       <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A1000000000000000000000A" BuildableName="HelloIPhone.app" BlueprintName="HelloIPhone" ReferencedContainer="container:HelloIPhone.xcodeproj"/>
     </BuildActionEntry></BuildActionEntries>
   </BuildAction>
-  <TestAction buildConfiguration="Debug"/>
+  <TestAction buildConfiguration="Debug" shouldUseLaunchSchemeArgsEnv="YES">
+<Testables><TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B1000000000000000000000A" BuildableName="ShaderLabTests.xctest" BlueprintName="ShaderLabTests" ReferencedContainer="container:HelloIPhone.xcodeproj"/></TestableReference></Testables>
+</TestAction>
   <LaunchAction buildConfiguration="Debug" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
     <BuildableProductRunnable runnableDebuggingMode="0"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A1000000000000000000000A" BuildableName="HelloIPhone.app" BlueprintName="HelloIPhone" ReferencedContainer="container:HelloIPhone.xcodeproj"/></BuildableProductRunnable>
   </LaunchAction>
