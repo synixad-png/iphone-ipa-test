@@ -44,7 +44,7 @@ final class ShaderLabTests: XCTestCase {
         ShaderScene.makeScene(shape: shape, shading: mode, color: color, metalness: metal, roughness: rough)
     }
     func testAllShapesAndNativeLightingModels() throws {
-        XCTAssertEqual(Shape3D.allCases.count, 8)
+        XCTAssertEqual(Shape3D.allCases.count, 9)
         XCTAssertEqual(Shading3D.allCases.count, 5)
         XCTAssertEqual(Set(Shading3D.allCases.map { $0.lighting.rawValue }).count, 5)
         for shape in Shape3D.allCases {
