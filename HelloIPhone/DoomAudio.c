@@ -43,6 +43,9 @@ static int useSfxPrefix = 1;
 static float userVolume = 0.85f;
 static unsigned int callbackCount = 0;
 static unsigned int playedSoundCount = 0;
+// Legacy Doom sound configuration symbols; iOS uses built-in linear resampling.
+int use_libsamplerate = 0;
+float libsamplerate_scale = 1.f;
 
 static float limited(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
@@ -296,13 +299,14 @@ int doom_audio_selftest(void) {
     DoomSample sample = {pcm,4,11025};
     int16_t out[8] = {0};
     pthread_mutex_lock(&soundLock);
-    DoomVoice saved = voices[0];
+    DoomVoice saved[DOOM_AUDIO_CHANNELS];
+    memcpy(saved, voices, sizeof(saved));
     float savedVolume = userVolume;
     for (int i=1; i<DOOM_AUDIO_CHANNELS; ++i) voices[i].sample = NULL;
     voices[0] = (DoomVoice){.sample=&sample,.position=0,.advance=1.0,.left=1.0,.right=0.0};
     userVolume=1.0f;
     mixFrames(out,4);
-    voices[0]=saved;
+    memcpy(voices, saved, sizeof(saved));
     userVolume=savedVolume;
     pthread_mutex_unlock(&soundLock);
     return out[0]==0 && out[1]==0 && out[2]>0 && out[3]==0 && out[4]<0 && out[5]==0;
