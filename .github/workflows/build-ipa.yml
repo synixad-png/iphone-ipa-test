@@ -6,6 +6,11 @@ on:
     branches: [main]
     paths-ignore: ['*.md', 'README.txt']
 
+# Only the newest code should consume the macOS builder or publish an IPA.
+concurrency:
+  group: shader-lab-ios-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
