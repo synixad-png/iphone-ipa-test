@@ -47,7 +47,7 @@ struct GameJoystick: View {
             }
             .frame(width: diameter, height: diameter)
             .contentShape(Circle())
-            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .highPriorityGesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
                     let dx = value.location.x - diameter / 2
                     let dy = value.location.y - diameter / 2
@@ -175,7 +175,7 @@ struct DoomPressControl: View {
             .padding(10)
             .background(.red.opacity(pressed ? 0.9 : 0.55), in: Capsule())
             .contentShape(Capsule())
-            .gesture(DragGesture(minimumDistance: 0)
+            .highPriorityGesture(DragGesture(minimumDistance: 0)
                 .onChanged { _ in if !pressed { pressed = true; action(true) } }
                 .onEnded { _ in pressed = false; action(false) })
     }
