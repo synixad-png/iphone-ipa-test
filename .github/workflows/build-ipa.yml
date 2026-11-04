@@ -65,12 +65,31 @@ jobs:
           xcrun simctl launch --terminate-running-process "$SIM_UDID" app.synix.shaderlab3d
           sleep 3
           xcrun simctl io "$SIM_UDID" screenshot dist/App-Simulator.png
+      - name: iPad simulator launch smoke test (when available)
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available -j > "$RUNNER_TEMP/ipad-devices.json"
+          IPAD_UDID=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(next((v["udid"] for k,vs in d["devices"].items() if "iOS" in k for v in vs if "iPad" in v["name"]), ""))' "$RUNNER_TEMP/ipad-devices.json")
+          if [[ -z "$IPAD_UDID" ]]; then
+            echo "No available iPad simulator. Device launch test NOT performed." | tee dist/iPad-smoke.txt
+          else
+            xcrun simctl boot "$IPAD_UDID"
+            xcrun simctl bootstatus "$IPAD_UDID" -b
+            APP="$RUNNER_TEMP/SimulatorBuild/Build/Products/Debug-iphonesimulator/HelloIPhone.app"
+            test -d "$APP"
+            xcrun simctl install "$IPAD_UDID" "$APP"
+            xcrun simctl launch "$IPAD_UDID" app.synix.shaderlab3d
+            sleep 3
+            xcrun simctl io "$IPAD_UDID" screenshot dist/App-iPad-Simulator.png
+            echo "iPad simulator launch PASS; screenshot saved" | tee dist/iPad-smoke.txt
+          fi
       - name: Package sources and test evidence
         shell: bash
         run: |
           set -euo pipefail
           git archive --format=zip --output=dist/SHADER_LAB_3D_v1_ZRODLA.zip HEAD
-          (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png test-summary.json simulator-tests.log device-build.log build-environment.txt verification.json SHA256SUMS.txt)
+          (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png iPad-smoke.txt test-summary.json simulator-tests.log device-build.log build-environment.txt verification.json SHA256SUMS.txt)\n          if [[ -f dist/App-iPad-Simulator.png ]]; then (cd dist && zip -q SHADER_LAB_3D_v1_TESTY.zip App-iPad-Simulator.png); fi
       - name: Upload GitHub Actions artifact
         continue-on-error: true
         uses: actions/upload-artifact@v4
