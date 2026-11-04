@@ -1,22 +1,37 @@
-TEST IPA NA IPHONE — projekt przygotowany do GitHub Actions
+TEST IPA NA IPHONE — ZBUDOWANY I ZWERYFIKOWANY
+Data: 2026-11-04
+Repozytorium prywatne: synixad-png/iphone-ipa-test
+Udana kompilacja: https://github.com/synixad-png/iphone-ipa-test/actions/runs/41800996964
+Pliki: https://github.com/synixad-png/iphone-ipa-test/releases/tag/ipa-build-41800996964-1
 
-STATUS: Nie wykonano jeszcze kompilacji macOS. Nie ma gotowego IPA.
-Przygotowanie 2026-11-04: poprawiono zgodnosc animacji z iOS 16,
-dodano wspoldzielony schemat Xcode, jawne ARM64 i walidacje IPA.
+Xcode 16.4, macOS 15.8.2, SDK iOS 18.5.
+HelloIPhone_unsigned.ipa: 25454 bajty, Mach-O ARM64, fizyczny iPhone, minimum iOS 16.
+SHA-256: 13cce757b4069b1a3d3299d3b9b8051acee528fe266ea256a4ef617d47d5018f
+Potwierdzono Payload/HelloIPhone.app, Info.plist, plik wykonywalny 0755,
+platforme iOS device i brak podpisu. Kontrola CRC ZIP: OK.
+Nie przeprowadzono instalacji ani testu uruchomienia na fizycznym telefonie.
 
-Repozytorium docelowe: synixad-png/iphone-ipa-test (nowe, prywatne).
-Pliki nalezy umiescic w katalogu glownym repozytorium z zachowaniem .github.
-Workflow startuje po push do main lub recznie przez workflow_dispatch.
-Artefakt HelloIPhone_unsigned_IPA zawiera IPA, SHA256SUMS.txt i verification.json.
-Nie nalezy traktowac przygotowanych zrodel jako udanej kompilacji.
+GitHub Actions zbudowal i zweryfikowal IPA. Wysylka zwyklego artefaktu Actions
+jest zablokowana limitem miejsca na koncie. Gotowe pliki zapisano zamiast tego
+jako zalaczniki do wydania w tym samym prywatnym repozytorium.
+ZIP wydania zawiera IPA, verification.json i SHA256SUMS.txt.
+Nie zmieniono innych repozytoriow.
 
-INSTALACJA PO UZYSKANIU POPRAWNEGO IPA
-1. Pobierz Sideloadly z https://sideloadly.io/ oraz wskazane tam wersje iTunes/iCloud dla Windows.
-2. Podlacz odblokowany iPhone przewodem i zatwierdz zaufanie do komputera.
-3. W Sideloadly wybierz iPhone i plik HelloIPhone_unsigned.ipa.
-4. Podaj Apple ID w Sideloadly, kliknij Start i wykonaj wymagane potwierdzenia Apple.
-5. W razie potrzeby zaufaj profilowi w Ustawienia > Ogolne > VPN i zarzadzanie urzadzeniem
-   oraz wlacz Tryb dewelopera w Ustawienia > Prywatnosc i ochrona.
-6. Darmowy podpis jest wazny 7 dni; odnow go przez Sideloadly.
-Aplikacja wymaga fizycznego iPhone z iOS 16 lub nowszym.
-Weryfikacja IPA potwierdza strukture i format binarny; dzialanie na telefonie wymaga instalacji.
+INSTALACJA WINDOWS 11 / DARMOWE APPLE ID
+1. Pobierz Sideloadly z https://sideloadly.io/ oraz wskazane na tej stronie
+   wersje iTunes i iCloud dla Windows pobierane ze strony Apple.
+2. Podlacz odblokowany iPhone przewodem USB i zatwierdz zaufanie do komputera.
+3. W Sideloadly wybierz iPhone i przeciagnij HelloIPhone_unsigned.ipa do programu.
+4. Wybierz instalacje przez Apple ID, podaj swoje Apple ID, kliknij Start
+   i wykonaj wymagane potwierdzenia logowania Apple w Sideloadly.
+5. Zaufaj profilowi w Ustawienia > Ogolne > VPN i zarzadzanie urzadzeniem.
+   Wlacz Tryb dewelopera w Ustawienia > Prywatnosc i ochrona i wykonaj restart,
+   jesli iPhone tego wymaga.
+6. Uruchom Moj pierwszy IPA. Kliknij licznik, zamknij aplikacje i otworz ja
+   ponownie, aby sprawdzic zapis wyniku.
+Darmowy podpis jest wazny 7 dni; odnawiaj go przez Sideloadly, uzywajac tego
+samego Apple ID i identyfikatora aplikacji.
+Zrodla instrukcji: https://sideloadly.io/ i https://sideloadly.io/faq.html
+
+Projekt: SwiftUI, bez zewnetrznych zaleznosci. Poprawiono animacje licznika dla
+iOS 16, dodano wspoldzielony schemat Xcode oraz automatyczna walidacje IPA.
