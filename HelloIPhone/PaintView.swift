@@ -238,61 +238,70 @@ struct PaintView: View {
     @State private var showShare = false
     @State private var canvasSize = CGSize(width: 600, height: 450)
 
+    // Only the tool palette scrolls; the drawing canvas never sits inside a ScrollView.
+    // This prevents a finger stroke from panning the entire screen.
     var body: some View {
         GeometryReader { layout in
             let wide = layout.size.width > 760
             ZStack {
                 LabStyle.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "paintbrush.pointed.fill")
-                                .foregroundStyle(LabStyle.accent)
-                                .frame(width: 44, height: 44)
-                                .background(LabStyle.accent.opacity(0.12),
-                                            in: RoundedRectangle(cornerRadius: 12))
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("PAINT")
-                                    .font(.system(size: wide ? 26 : 21,
-                                                  weight: .bold, design: .rounded))
-                                Text("Rysuj palcem lub Apple Pencil")
-                                    .font(.caption)
-                                    .foregroundStyle(LabStyle.muted)
-                            }
-                            Spacer()
-                            Button {
-                                exportImage = PaintDocument.render(
-                                    document.strokes, size: CGSize(width: 1400, height: 1000))
-                                showShare = true
-                            } label: {
-                                Label("Zapisz", systemImage: "square.and.arrow.up")
-                                    .font(.subheadline.bold())
-                            }
-                            .buttonStyle(LabPrimaryButtonStyle())
-                            .fixedSize(horizontal: true, vertical: false)
-                            .accessibilityLabel("Zapisz lub udostępnij rysunek")
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "paintbrush.pointed.fill")
+                            .foregroundStyle(LabStyle.accent)
+                            .frame(width: 44, height: 44)
+                            .background(LabStyle.accent.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("PAINT")
+                                .font(.system(size: wide ? 26 : 21,
+                                              weight: .bold, design: .rounded))
+                            Text("Rysuj palcem lub Apple Pencil")
+                                .font(.caption)
+                                .foregroundStyle(LabStyle.muted)
                         }
-                        if wide {
-                            HStack(alignment: .top, spacing: 16) {
-                                drawingPanel
-                                    .frame(maxWidth: .infinity)
-                                toolsPanel
-                                    .frame(width: min(300, layout.size.width * 0.32))
-                            }
-                        } else {
-                            drawingPanel
-                            toolsPanel
+                        Spacer(minLength: 0)
+                        Button {
+                            exportImage = PaintDocument.render(
+                                document.strokes, size: CGSize(width: 1400, height: 1000))
+                            showShare = true
+                        } label: {
+                            Label("Zapisz", systemImage: "square.and.arrow.up")
+                                .font(.subheadline.bold())
                         }
-                        Text("Rysunek zapisuje się automatycznie w aplikacji. Przycisk Zapisz pozwala wyeksportować obraz do Zdjęć lub Plików.")
-                            .font(.caption)
-                            .foregroundStyle(LabStyle.muted)
+                        .buttonStyle(LabPrimaryButtonStyle())
+                        .fixedSize(horizontal: true, vertical: false)
+                        .accessibilityLabel("Zapisz lub udostępnij rysunek")
                     }
-                    .padding(.horizontal, wide ? 24 : 12)
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: 1260)
-                    .frame(maxWidth: .infinity)
+
+                    if wide {
+                        HStack(alignment: .top, spacing: 14) {
+                            drawingPanel
+                                .frame(maxWidth: .infinity, alignment: .top)
+                            ScrollView {
+                                toolsPanel
+                                    .padding(.bottom, 12)
+                            }
+                            .scrollIndicators(.hidden)
+                            .frame(width: min(300, layout.size.width * 0.32))
+                        }
+                        .frame(maxHeight: .infinity, alignment: .top)
+                    } else {
+                        drawingPanel
+                            .fixedSize(horizontal: false, vertical: true)
+                        ScrollView {
+                            toolsPanel
+                                .padding(.bottom, 15)
+                        }
+                        .scrollIndicators(.hidden)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, wide ? 24 : 12)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+                .frame(maxWidth: 1260, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .foregroundStyle(.white)
