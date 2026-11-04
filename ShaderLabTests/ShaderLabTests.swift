@@ -47,6 +47,33 @@ final class ShaderLabTests: XCTestCase {
 
 
 
+
+    func testSmileQuotesCatalogAndNames() {
+        XCTAssertEqual(SmileQuote.catalog.count, 48)
+        XCTAssertEqual(Set(SmileQuote.catalog.map(\.id)).count, 48)
+        for hero in [SmileHero.hania, .martna, .ania] {
+            let quotes = SmileQuote.filtered(hero)
+            XCTAssertGreaterThan(quotes.count, 12)
+            XCTAssertTrue(quotes.allSatisfy { $0.hero == hero || $0.hero == .all })
+            XCTAssertTrue(SmileQuote.catalog.contains { $0.hero == hero })
+        }
+        XCTAssertEqual(SmileQuote.filtered(.all).count, 48)
+        XCTAssertFalse(SmileQuote.catalog.contains { $0.text.isEmpty || $0.signature.isEmpty })
+    }
+
+    func testSmileQuotesNeverImmediatelyRepeatWhenAlternativesExist() {
+        let quotes = SmileQuote.filtered(.hania)
+        let previous = quotes[0].id
+        for _ in 0..<200 {
+            let next = SmileQuote.next(in: quotes, excluding: previous)
+            XCTAssertNotNil(next)
+            XCTAssertNotEqual(next?.id, previous)
+        }
+        XCTAssertNil(SmileQuote.next(in: [], excluding: nil))
+        let single = [quotes[0]]
+        XCTAssertEqual(SmileQuote.next(in: single, excluding: previous)?.id, previous)
+    }
+
     func testPaintUndoRedoClearAndNewStroke() {
         let doc = PaintDocument(loadExisting: false)
         let one = PaintStroke(points: [PaintPoint(x:0.1,y:0.2), PaintPoint(x:0.7,y:0.8)],
