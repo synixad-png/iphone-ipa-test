@@ -46,6 +46,61 @@ final class ShaderLabTests: XCTestCase {
     }
 
 
+
+    func testPaintUndoRedoClearAndNewStroke() {
+        let doc = PaintDocument(loadExisting: false)
+        let one = PaintStroke(points: [PaintPoint(x:0.1,y:0.2), PaintPoint(x:0.7,y:0.8)],
+                              paletteIndex:7, thickness:8, eraser:false)
+        let two = PaintStroke(points: [PaintPoint(x:0.3,y:0.4)], paletteIndex:2,
+                              thickness:15, eraser:true)
+        XCTAssertFalse(doc.canUndo)
+        doc.append(one)
+        doc.append(two)
+        XCTAssertEqual(doc.strokes.count, 2)
+        doc.undo()
+        XCTAssertEqual(doc.strokes, [one])
+        XCTAssertTrue(doc.canRedo)
+        doc.redo()
+        XCTAssertEqual(doc.strokes, [one,two])
+        doc.clear()
+        XCTAssertEqual(doc.strokes.count,0)
+        doc.undo()
+        XCTAssertEqual(doc.strokes.count,0)
+        doc.redo()
+        XCTAssertEqual(doc.strokes, [one])
+        doc.redo()
+        XCTAssertEqual(doc.strokes, [one,two])
+        doc.undo()
+        doc.append(two)
+        XCTAssertFalse(doc.canRedo, "New paint stroke must invalidate redo history")
+    }
+
+    func testPaintExportRendersOpaqueWhiteAndColorPixels() throws {
+        let empty = PaintDocument.render([], size: CGSize(width:100,height:100), scale:1)
+        let cg = try XCTUnwrap(empty.cgImage)
+        XCTAssertEqual(cg.width, 100)
+        XCTAssertEqual(cg.height, 100)
+        let white = try pixels(empty)
+        XCTAssertEqual(white[0],255)
+        XCTAssertEqual(white[1],255)
+        XCTAssertEqual(white[2],255)
+
+        let red = PaintStroke(points: [PaintPoint(x:0.1,y:0.5),PaintPoint(x:0.9,y:0.5)],
+                              paletteIndex:2, thickness:16, eraser:false)
+        let painted = PaintDocument.render([red], size:CGSize(width:100,height:100), scale:1)
+        let bytes = try pixels(painted)
+        let center = (50*100+50)*4
+        XCTAssertGreaterThan(bytes[center],bytes[center+1])
+        XCTAssertLessThan(bytes[center+1],240)
+        let erase = PaintStroke(points:[PaintPoint(x:0.5,y:0.5)], paletteIndex:0,
+                                thickness:20, eraser:true)
+        let corrected = PaintDocument.render([red,erase],size:CGSize(width:100,height:100),scale:1)
+        let correctedBytes = try pixels(corrected)
+        XCTAssertEqual(correctedBytes[center],255)
+        XCTAssertEqual(correctedBytes[center+1],255)
+        XCTAssertEqual(correctedBytes[center+2],255)
+    }
+
     func testAsteroidsSweptProjectileCollision() {
         // A projectile moves from left to right across a small rock in one frame.
         XCTAssertTrue(AsteroidsArcadeScene.segmentIntersectsCircle(
