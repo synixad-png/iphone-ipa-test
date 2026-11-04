@@ -324,6 +324,18 @@ final class AsteroidsArcadeScene: SKScene {
     var turnRight = false
     var accelerating = false
     var shooting = false
+    private(set) var shieldTime: TimeInterval = 0
+    private(set) var boostCooldown: TimeInterval = 0
+    private(set) var rapidFireTime: TimeInterval = 0
+    private(set) var bestScore = UserDefaults.standard.integer(forKey: "asteroids.bestScore")
+    private var shieldRing = SKShapeNode()
+    private struct Bonus {
+        var node: SKShapeNode
+        var kind: Int // 0 shield, 1 rapid fire, 2 extra life
+        var remaining: TimeInterval
+    }
+    private var bonuses: [Bonus] = []
+    private var debris: [SKNode] = []
 
     private(set) var score = 0
     private(set) var lives = 3
@@ -384,6 +396,13 @@ final class AsteroidsArcadeScene: SKScene {
         ship.fillColor = SKColor(red: 0.04, green: 0.28, blue: 0.45, alpha: 0.8)
         ship.zPosition = 5
         addChild(ship)
+        shieldRing = SKShapeNode(circleOfRadius: 23)
+        shieldRing.strokeColor = .systemTeal
+        shieldRing.lineWidth = 2.5
+        shieldRing.glowWidth = 4
+        shieldRing.fillColor = .clear
+        shieldRing.zPosition = 6
+        addChild(shieldRing)
 
         hud.fontSize = 14
         hud.fontColor = .white
@@ -402,8 +421,12 @@ final class AsteroidsArcadeScene: SKScene {
     func restart() {
         for rock in rocks { rock.node.removeFromParent() }
         for shot in shots { shot.node.removeFromParent() }
+        for bonus in bonuses { bonus.node.removeFromParent() }
+        for node in debris { node.removeFromParent() }
         rocks.removeAll()
         shots.removeAll()
+        bonuses.removeAll()
+        debris.removeAll()
         score = 0
         lives = 3
         wave = 1
@@ -414,16 +437,23 @@ final class AsteroidsArcadeScene: SKScene {
         shotCooldown = 0
         invulnerable = 2
         waveCooldown = 0
+        shieldTime = 3
+        boostCooldown = 0
+        rapidFireTime = 0
         shooting = false
         ship.isHidden = false
         ship.position = CGPoint(x: size.width / 2, y: size.height / 2)
         ship.zRotation = shipAngle
+        shieldRing.position = ship.position
         spawnWave()
         refreshHUD()
     }
 
     private func refreshHUD() {
-        hud.text = "WYNIK: \(score)    ŻYCIA: \(lives)    FALA: \(wave)"
+        hud.text = "PKT \(score)  REK \(bestScore)  ŻYCIA \(lives)  FALA \(wave)"
+        hud.fontSize = 11
+        shieldRing.isHidden = shieldTime <= 0 || isGameOver
+        shieldRing.alpha = shieldTime > 0 ? 0.85 : 0
         if isGameOver { message.text = "KONIEC GRY" }
         else if waveCooldown > 0 { message.text = "FALA \(wave)" }
         else { message.text = "" }
@@ -477,7 +507,7 @@ final class AsteroidsArcadeScene: SKScene {
     }
 
     private func fire() {
-        guard shots.count < 8 else { return }
+        guard shots.count < (rapidFireTime > 0 ? 16 : 8) else { return }
         let direction = CGVector(dx: cos(shipAngle), dy: sin(shipAngle))
         let origin = CGPoint(x: ship.position.x + direction.dx * 18,
                              y: ship.position.y + direction.dy * 18)
@@ -499,6 +529,12 @@ final class AsteroidsArcadeScene: SKScene {
         let location = rock.node.position
         rock.node.removeFromParent()
         score += (4 - rock.tier) * 25
+        if score > bestScore {
+            bestScore = score
+            UserDefaults.standard.set(bestScore, forKey: "asteroids.bestScore")
+        }
+        burst(at: location, tint: rock.node.strokeColor, count: rock.tier == 3 ? 13 : 7)
+        if Int.random(in: 0..<100) < 13 { spawnBonus(at: location) }
         if rock.tier > 1 {
             for sign in [-1.0, 1.0] {
                 let angle = CGFloat.random(in: 0...(.pi * 2))
@@ -510,8 +546,59 @@ final class AsteroidsArcadeScene: SKScene {
         }
     }
 
+    private func burst(at position: CGPoint, tint: SKColor, count: Int) {
+        for _ in 0..<count {
+            let dot = SKShapeNode(circleOfRadius: CGFloat.random(in: 1.4...3.0))
+            dot.fillColor = tint
+            dot.strokeColor = .clear
+            dot.glowWidth = 2
+            dot.position = position
+            dot.zPosition = 8
+            addChild(dot)
+            debris.append(dot)
+            let angle = CGFloat.random(in: 0...(.pi * 2))
+            let distance = CGFloat.random(in: 16...55)
+            let duration = Double.random(in: 0.25...0.55)
+            let move = SKAction.moveBy(x: cos(angle) * distance, y: sin(angle) * distance, duration: duration)
+            let fade = SKAction.fadeOut(withDuration: duration)
+            dot.run(.sequence([.group([move, fade]), .removeFromParent()]))
+        }
+        // Keep only live particles. The actions remove their scene nodes.
+        if debris.count > 250 { debris.removeAll { $0.parent == nil } }
+    }
+
+    private func spawnBonus(at position: CGPoint) {
+        let kind = Int.random(in: 0...2)
+        let icon = SKShapeNode(circleOfRadius: 12)
+        icon.strokeColor = kind == 0 ? .cyan : (kind == 1 ? .systemYellow : .systemGreen)
+        icon.fillColor = SKColor(red: 0.04, green: 0.1, blue: 0.16, alpha: 0.95)
+        icon.lineWidth = 2
+        icon.glowWidth = 3
+        icon.position = position
+        icon.zPosition = 7
+        let label = SKLabelNode(text: kind == 0 ? "S" : (kind == 1 ? "R" : "+"))
+        label.fontName = "Menlo-Bold"
+        label.fontSize = 14
+        label.verticalAlignmentMode = .center
+        label.fontColor = icon.strokeColor
+        icon.addChild(label)
+        addChild(icon)
+        bonuses.append(Bonus(node: icon, kind: kind, remaining: 10))
+    }
+
+    func activateBoost() {
+        guard !isGameOver && boostCooldown <= 0 else { return }
+        shipVelocity.dx += cos(shipAngle) * 280
+        shipVelocity.dy += sin(shipAngle) * 280
+        boostCooldown = 6
+        shieldTime = max(shieldTime, 0.7)
+        burst(at: ship.position, tint: .cyan, count: 18)
+    }
+
     private func loseLife() {
+        burst(at: ship.position, tint: .systemRed, count: 24)
         lives -= 1
+        shieldTime = 1.8
         invulnerable = 2.2
         ship.position = CGPoint(x: size.width / 2, y: size.height / 2)
         shipVelocity = .zero
@@ -528,6 +615,9 @@ final class AsteroidsArcadeScene: SKScene {
         guard size.width > 1 && size.height > 1 else { return }
         guard !isGameOver else { return }
         let t = CGFloat(dt)
+        shieldTime = max(0, shieldTime - dt)
+        rapidFireTime = max(0, rapidFireTime - dt)
+        boostCooldown = max(0, boostCooldown - dt)
 
         if turnLeft { shipAngle += 3.7 * t }
         if turnRight { shipAngle -= 3.7 * t }
@@ -544,8 +634,9 @@ final class AsteroidsArcadeScene: SKScene {
         ship.position = wrap(CGPoint(x: ship.position.x + shipVelocity.dx * t,
                                      y: ship.position.y + shipVelocity.dy * t), margin: 15)
 
+        shieldRing.position = ship.position
         shotCooldown -= dt
-        if shooting && shotCooldown <= 0 { fire(); shotCooldown = 0.18 }
+        if shooting && shotCooldown <= 0 { fire(); shotCooldown = rapidFireTime > 0 ? 0.075 : 0.18 }
         invulnerable = max(0, invulnerable - dt)
         ship.alpha = invulnerable > 0 ? (sin(currentTime * 17) > 0 ? 1 : 0.28) : 1
 
@@ -579,7 +670,25 @@ final class AsteroidsArcadeScene: SKScene {
             }
         }
 
-        if invulnerable <= 0 && rocks.contains(where: {
+        for i in bonuses.indices.reversed() {
+            bonuses[i].remaining -= dt
+            let b = bonuses[i]
+            if b.remaining <= 0 {
+                b.node.removeFromParent()
+                bonuses.remove(at: i)
+            } else if hypot(b.node.position.x - ship.position.x,
+                             b.node.position.y - ship.position.y) < 27 {
+                switch b.kind {
+                case 0: shieldTime = max(shieldTime, 8)
+                case 1: rapidFireTime = max(rapidFireTime, 9)
+                default: lives = min(5, lives + 1)
+                }
+                burst(at: b.node.position, tint: b.node.strokeColor, count: 12)
+                b.node.removeFromParent()
+                bonuses.remove(at: i)
+            }
+        }
+        if invulnerable <= 0 && shieldTime <= 0 && rocks.contains(where: {
             hypot($0.node.position.x - ship.position.x,
                   $0.node.position.y - ship.position.y) < $0.radius + shipRadius
         }) { loseLife() }
@@ -588,7 +697,7 @@ final class AsteroidsArcadeScene: SKScene {
             if waveCooldown <= 0 {
                 wave += 1
                 spawnWave()
-            }
+            } else { waveCooldown = max(0, waveCooldown - dt) }
         } else if waveCooldown > 0 { waveCooldown = max(0, waveCooldown - dt) }
         refreshHUD()
     }
@@ -630,14 +739,29 @@ struct AsteroidsGameView: View {
                     .ignoresSafeArea(edges: .bottom)
                 VStack(spacing: 10) {
                     Spacer()
-                    HStack(spacing: 9) {
+                    HStack(spacing: 7) {
                         ArcadeHoldButton(symbol: "arrow.counterclockwise", title: "LEWO") { scene.turnLeft = $0 }
                         ArcadeHoldButton(symbol: "arrow.clockwise", title: "PRAWO") { scene.turnRight = $0 }
                         ArcadeHoldButton(symbol: "flame.fill", title: "CIĄG") { scene.accelerating = $0 }
                         ArcadeHoldButton(symbol: "scope", title: "OGIEŃ") { scene.shooting = $0 }
                     }
                     .padding(.horizontal, 8)
-                    .padding(.bottom, 20)
+                    HStack {
+                        Button {
+                            scene.activateBoost()
+                        } label: {
+                            Label("DOPALACZ (6 s)", systemImage: "bolt.fill")
+                                .font(.caption.bold())
+                                .padding(.horizontal, 16).padding(.vertical, 11)
+                                .background(Color.orange.opacity(0.25), in: Capsule())
+                        }
+                        .foregroundStyle(.orange)
+                        Spacer()
+                        Text("S: OSŁONA  R: SZYBKI OGIEŃ  +: ŻYCIE")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }.padding(.horizontal, 12)
+                    .padding(.bottom, 8)
                     Button("NOWA GRA") { scene.restart() }
                         .font(.caption.bold())
                         .foregroundStyle(.cyan)
