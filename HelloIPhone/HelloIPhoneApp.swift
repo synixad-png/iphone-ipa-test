@@ -12,7 +12,7 @@ struct HelloIPhoneApp: App {
 }
 
 enum Shape3D: String, CaseIterable, Identifiable {
-    case sphere = "Kula", cube = "Sześcian", torus = "Torus", cone = "Stożek", cylinder = "Walec", pyramid = "Ostrosłup", capsule = "Kapsuła", knot = "Chromowy węzeł"
+    case sphere = "Kula", cube = "Sześcian", torus = "Torus", cone = "Stożek", cylinder = "Walec", pyramid = "Ostrosłup", capsule = "Kapsuła", knot = "Chromowy węzeł", imported = "Własny GLB"
     var id: String { rawValue }
     var geometry: SCNGeometry {
         switch self {
@@ -26,6 +26,7 @@ enum Shape3D: String, CaseIterable, Identifiable {
         case .pyramid: return SCNPyramid(width: 1.8, height: 1.9, length: 1.8)
         case .capsule: return SCNCapsule(capRadius: 0.7, height: 2)
         case .knot: return SCNSphere(radius: 0.85)
+        case .imported: return SCNSphere(radius: 0.85)
         }
     }
 }
@@ -122,6 +123,7 @@ enum GLBKnot {
 
 enum ShaderScene {
     static var knot: SCNGeometry?
+    static var imported: GLBSceneLoader.Loaded?
     static let background = UIColor(red: 0.035, green: 0.055, blue: 0.1, alpha: 1)
     static let environment: UIImage = {
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
@@ -206,13 +208,32 @@ enum ShaderScene {
                        color: UIColor, metalness: Double, roughness: Double, spinning: Bool,
                        effect: SurfaceFX = .normal, lightPreset: LightPreset = .studio, lightPower: Double = 1.0) {
         guard let model = scene.rootNode.childNode(withName: "model", recursively: false) else { return }
+        if shape == .imported {
+            if let imported, model.name != "imported:" + imported.filename {
+                model.removeAllAnimationPlayers()
+                model.removeAction(forKey: "spin")
+                for child in model.childNodes { child.removeFromParentNode() }
+                model.geometry = nil
+                model.addChildNode(imported.root)
+                model.name = "imported:" + imported.filename
+            }
+            // Preserve imported glTF material textures. Controls for built-in shapes must not overwrite them.
+        } else {
+            if model.name?.hasPrefix("imported:") == true {
+                model.removeAllAnimationPlayers()
+                for child in model.childNodes { child.removeFromParentNode() }
+                model.name = "model"
+            }
+        }
         let shapeID = "shape:" + shape.rawValue
-        if model.geometry?.name != shapeID {
+        if shape != .imported && model.geometry?.name != shapeID {
             model.geometry = shape == .knot ? (knot ?? shape.geometry) : shape.geometry
             model.geometry?.name = shapeID
         }
         let chrome = shape == .knot
-        model.geometry?.materials = [material(shading, color: chrome ? UIColor(red: 0.92, green: 0.92, blue: 0.94, alpha: 1) : color, metalness: chrome ? 0.93 : metalness, roughness: chrome ? 0.115 : roughness, effect: effect)]
+        if shape != .imported {
+            model.geometry?.materials = [material(shading, color: chrome ? UIColor(red: 0.92, green: 0.92, blue: 0.94, alpha: 1) : color, metalness: chrome ? 0.93 : metalness, roughness: chrome ? 0.115 : roughness, effect: effect)]
+        }
         let palette: (UIColor, UIColor)
         switch lightPreset {
         case .studio: palette = (.white, .cyan)
@@ -225,9 +246,9 @@ enum ShaderScene {
         key?.color = palette.0; key?.intensity = 1000 * power
         let rim = scene.rootNode.childNode(withName: "rim", recursively: false)?.light
         rim?.color = palette.1; rim?.intensity = 650 * power
-        if spinning && model.action(forKey: "spin") == nil {
+        if shape != .imported && spinning && model.action(forKey: "spin") == nil {
             model.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: shape == .knot ? 16 : 9)), forKey: "spin")
-        } else if !spinning {
+        } else if !spinning || shape == .imported {
             model.removeAction(forKey: "spin")
         }
     }
@@ -259,6 +280,9 @@ struct ModelView: UIViewRepresentable {
     let lightPower: Double
     let color: UIColor
     let knotRevision: Int
+    let importedRevision: Int
+    let clipIndex: Int
+    let playGLB: Bool
 
     func makeUIView(context: Context) -> SCNView { ShaderScene.makeView() }
     func updateUIView(_ view: SCNView, context: Context) {
@@ -271,8 +295,19 @@ struct ModelView: UIViewRepresentable {
         ShaderScene.update(scene, shape: shape, shading: shading, color: color,
                            metalness: metalness, roughness: roughness, spinning: spinning,
                            effect: effect, lightPreset: lightPreset, lightPower: lightPower)
-        view.isPlaying = spinning
-        view.rendersContinuously = spinning
+        if shape == .imported, let imported = ShaderScene.imported {
+            let model = scene.rootNode.childNode(withName: "model", recursively: false)
+            let key = "gltf-clip"
+            if model?.animationPlayer(forKey: key) == nil,
+               imported.animations.indices.contains(clipIndex) {
+                model?.removeAnimationPlayer(forKey: key)
+                model?.addAnimationPlayer(imported.animations[clipIndex].animationPlayer, forKey: key)
+            }
+            model?.animationPlayer(forKey: key)?.paused = !playGLB
+        }
+        _ = importedRevision
+        view.isPlaying = spinning || (shape == .imported && playGLB)
+        view.rendersContinuously = spinning || (shape == .imported && playGLB)
     }
 }
 
@@ -286,6 +321,17 @@ struct ShaderLabView: View {
     @State private var showKnotPicker = false
     @State private var knotRevision = 0
     @State private var knotError: String?
+    @State private var showGLBImporter = false
+    @State private var importedRevision = 0
+    @State private var importedName = ""
+    @State private var playGLB = true
+    @State private var clipIndex = 0
+    @State private var importing = false
+    private let savedGLBName = "imported-model.glb"
+    private var savedGLBURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(savedGLBName)
+    }
     @State private var effect: SurfaceFX = .normal
     @State private var lightPreset: LightPreset = .studio
     @State private var lightPower = 1.0
@@ -310,7 +356,8 @@ struct ShaderLabView: View {
                     }
                     ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness, spinning: spinning, effect: effect, lightPreset: lightPreset,
                               lightPower: lightPower, color: swatches[selectedColor].1,
-                              knotRevision: knotRevision)
+                              knotRevision: knotRevision, importedRevision: importedRevision,
+                              clipIndex: clipIndex, playGLB: playGLB)
                         .frame(height: 315)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                         .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.12)))
@@ -322,6 +369,7 @@ struct ShaderLabView: View {
                                 Button(item.rawValue) {
                                     shape = item
                                     if item == .knot && ShaderScene.knot == nil { showKnotPicker = true }
+                                    if item == .imported && ShaderScene.imported == nil { showGLBImporter = true }
                                 }
                                     .padding(.horizontal, 12).padding(.vertical, 9)
                                     .background(shape == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
@@ -349,7 +397,32 @@ struct ShaderLabView: View {
                                 .font(.caption).foregroundStyle(.white.opacity(0.7))
                         }
                     }
-                    Text("MODEL CIENIOWANIA").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button {
+                            showGLBImporter = true
+                        } label: {
+                            Label(importing ? "WCZYTYWANIE..." : "WCZYTAJ GLB Z PLIKÓW", systemImage: "square.and.arrow.down")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.cyan)
+                        }.disabled(importing)
+                        if shape == .imported {
+                            Text(ShaderScene.imported == nil ? "Wybierz plik GLB. Obsługiwane są materiały PBR, tekstury i animacje glTF." : "Model: \(importedName)")
+                                .font(.caption).foregroundStyle(.white.opacity(0.75))
+                            if let asset = ShaderScene.imported, !asset.animations.isEmpty {
+                                Picker("Animacja", selection: $clipIndex) {
+                                    ForEach(Array(asset.animations.enumerated()), id: \.offset) { item in
+                                        Text(item.element.name.isEmpty ? "Animacja \(item.offset + 1)" : item.element.name)
+                                            .tag(item.offset)
+                                    }
+                                }.pickerStyle(.menu).tint(.cyan)
+                                Toggle("Odtwarzaj animację", isOn: $playGLB).tint(.cyan)
+                            } else if ShaderScene.imported != nil {
+                                Text("Ten model nie zawiera animacji.")
+                                    .font(.caption).foregroundStyle(.white.opacity(0.65))
+                            }
+                        }
+                    }
+                                        Text("MODEL CIENIOWANIA").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
                     Picker("Cieniowanie", selection: $shading) {
                         ForEach(Shading3D.allCases) { item in Text(item.rawValue).tag(item) }
                     }.pickerStyle(.menu).tint(.white)
@@ -393,6 +466,9 @@ struct ShaderLabView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            if ShaderScene.imported == nil && FileManager.default.fileExists(atPath: savedGLBURL.path) {
+                loadImported(savedGLBURL, filename: UserDefaults.standard.string(forKey: "shaderlab.importedFilename") ?? savedGLBName)
+            }
             if ShaderScene.knot == nil && FileManager.default.fileExists(atPath: GLBKnot.saved.path) {
                 if let model = try? GLBKnot.parse(GLBKnot.saved) {
                     ShaderScene.knot = model
@@ -400,7 +476,49 @@ struct ShaderLabView: View {
                 }
             }
         }
-        .fileImporter(isPresented: $showKnotPicker, allowedContentTypes: [.data, .item]) { result in
+        .fileImporter(isPresented: $showGLBImporter, allowedContentTypes: [UTType(filenameExtension: "glb") ?? .data, .data]) { result in
+            do {
+                let url = try result.get()
+                guard url.pathExtension.lowercased() == "glb" else {
+                    knotError = "Wybierz plik z rozszerzeniem .glb."
+                    return
+                }
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                let temp = savedGLBURL.deletingLastPathComponent().appendingPathComponent("model-import-pending.glb")
+                if FileManager.default.fileExists(atPath: temp.path) { try FileManager.default.removeItem(at: temp) }
+                try FileManager.default.copyItem(at: url, to: temp)
+                importing = true
+                GLBSceneLoader.load(from: temp) { result in
+                    importing = false
+                    switch result {
+                    case .success(let loaded):
+                        do {
+                            if FileManager.default.fileExists(atPath: savedGLBURL.path) {
+                                try FileManager.default.removeItem(at: savedGLBURL)
+                            }
+                            try FileManager.default.moveItem(at: temp, to: savedGLBURL)
+                            ShaderScene.imported = loaded
+                            importedName = url.lastPathComponent
+                            UserDefaults.standard.set(importedName, forKey: "shaderlab.importedFilename")
+                            clipIndex = 0
+                            playGLB = true
+                            spinning = false
+                            shape = .imported
+                            importedRevision += 1
+                        } catch {
+                            knotError = "Błąd zapisu modelu: \(error.localizedDescription)"
+                        }
+                    case .failure(let error):
+                        try? FileManager.default.removeItem(at: temp)
+                        knotError = "Nie można wczytać GLB: \(error.localizedDescription)"
+                    }
+                }
+            } catch {
+                knotError = "Nie można otworzyć pliku: \(error.localizedDescription)"
+            }
+        }
+                .fileImporter(isPresented: $showKnotPicker, allowedContentTypes: [.data, .item]) { result in
             do {
                 let source = try result.get()
                 let access = source.startAccessingSecurityScopedResource()
@@ -417,10 +535,24 @@ struct ShaderLabView: View {
             Button("OK") { knotError = nil }
         } message: { Text(knotError ?? "") }
     }
+
+    private func loadImported(_ url: URL, filename: String) {
+        importing = true
+        GLBSceneLoader.load(from: url) { result in
+            importing = false
+            switch result {
+            case .success(let loaded):
+                ShaderScene.imported = loaded
+                importedName = filename
+                importedRevision += 1
+            case .failure(let error):
+                knotError = "Zapisany model GLB: \(error.localizedDescription)"
+            }
+        }
+    }
 }
 
 
- 
 // MARK: - Independent arcade game. No changes to the SceneKit shader pipeline.
 final class AsteroidsArcadeScene: SKScene {
     struct Rock {
