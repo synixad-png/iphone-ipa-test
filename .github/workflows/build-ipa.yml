@@ -62,7 +62,15 @@ jobs:
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/ShaderLabTests.xcresult" > dist/test-summary.json
           DATA_DIR=$(xcrun simctl get_app_container "$SIM_UDID" app.synix.shaderlab3d data)
           ditto "$DATA_DIR/Documents/ShaderLabEvidence" dist/RenderEvidence
-          xcrun simctl launch --terminate-running-process "$SIM_UDID" app.synix.shaderlab3d
+          # XCTest may terminate its host app. Reinstall the tested simulator binary before smoke launch.
+          SIM_APP="$RUNNER_TEMP/SimulatorBuild/Build/Products/Debug-iphonesimulator/HelloIPhone.app"
+          xcrun simctl terminate "$SIM_UDID" app.synix.shaderlab3d || true
+          xcrun simctl install "$SIM_UDID" "$SIM_APP"
+          if ! xcrun simctl launch "$SIM_UDID" app.synix.shaderlab3d; then
+            echo "iPhone simulator launch failed after XCTest - extracting diagnostics:"
+            xcrun simctl spawn "$SIM_UDID" log show --last 3m --style compact --predicate 'process == "HelloIPhone" OR eventMessage CONTAINS "app.synix.shaderlab3d"' | tail -150 || true
+            exit 1
+          fi
           sleep 3
           xcrun simctl io "$SIM_UDID" screenshot dist/App-Simulator.png
       - name: iPad simulator launch smoke test (when available)
