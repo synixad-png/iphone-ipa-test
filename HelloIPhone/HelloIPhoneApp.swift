@@ -1174,7 +1174,7 @@ final class AsteroidsArcadeScene: SKScene {
 
     private func burst(at position: CGPoint, tint: SKColor, count: Int) {
         for i in 0..<count {
-            let angle = CGFloat(i)*2*.pi/CGFloat(count) + CGFloat.random(in:-0.2...0.2)
+            let angle = CGFloat(i) * 2 * CGFloat.pi/CGFloat(count) + CGFloat.random(in:-0.2...0.2)
             let speed = CGFloat.random(in: 65...285)
             emitSpark(at:position,
                       velocity:CGVector(dx:cos(angle)*speed, dy:sin(angle)*speed),
