@@ -1,11 +1,12 @@
 import SwiftUI
 import SceneKit
 import Metal
+import SpriteKit
 
 @main
 struct HelloIPhoneApp: App {
     var body: some Scene {
-        WindowGroup { ShaderLabView() }
+        WindowGroup { MainTabsView() }
     }
 }
 
@@ -298,6 +299,377 @@ struct ShaderLabView: View {
                 .padding(18)
             }
         }
+        .preferredColorScheme(.dark)
+    }
+}
+
+
+ 
+// MARK: - Independent arcade game. No changes to the SceneKit shader pipeline.
+final class AsteroidsArcadeScene: SKScene {
+    struct Rock {
+        var node: SKShapeNode
+        var velocity: CGVector
+        var radius: CGFloat
+        var tier: Int
+        var spin: CGFloat
+    }
+    struct Shot {
+        var node: SKShapeNode
+        var velocity: CGVector
+        var lifetime: TimeInterval
+    }
+
+    var turnLeft = false
+    var turnRight = false
+    var accelerating = false
+    var shooting = false
+
+    private(set) var score = 0
+    private(set) var lives = 3
+    private(set) var wave = 1
+    private(set) var isGameOver = false
+    private var ship = SKShapeNode()
+    private var rocks: [Rock] = []
+    private var shots: [Shot] = []
+    private var stars: [SKShapeNode] = []
+    private var shipVelocity = CGVector.zero
+    private var shipAngle: CGFloat = .pi / 2
+    private var lastUpdate: TimeInterval = 0
+    private var shotCooldown: TimeInterval = 0
+    private var invulnerable: TimeInterval = 0
+    private var waveCooldown: TimeInterval = 0
+    private let hud = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let message = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let shipRadius: CGFloat = 13
+
+    override func didMove(to view: SKView) {
+        backgroundColor = SKColor(red: 0.018, green: 0.025, blue: 0.065, alpha: 1)
+        scaleMode = .resizeFill
+        guard ship.parent == nil else { return }
+        configureNodes()
+        restart()
+    }
+
+    override func didChangeSize(_ oldSize: CGSize) {
+        super.didChangeSize(oldSize)
+        hud.position = CGPoint(x: 12, y: max(20, size.height - 34))
+        message.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        for star in stars { star.removeFromParent() }
+        stars.removeAll()
+        guard size.width > 0 && size.height > 0 else { return }
+        for _ in 0..<80 {
+            let dot = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.45...1.3))
+            dot.fillColor = .white.withAlphaComponent(CGFloat.random(in: 0.18...0.68))
+            dot.strokeColor = .clear
+            dot.position = CGPoint(x: CGFloat.random(in: 0...size.width),
+                                   y: CGFloat.random(in: 0...size.height))
+            dot.zPosition = -5
+            addChild(dot)
+            stars.append(dot)
+        }
+    }
+
+    private func configureNodes() {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 16, y: 0))
+        path.addLine(to: CGPoint(x: -11, y: 10))
+        path.addLine(to: CGPoint(x: -7, y: 0))
+        path.addLine(to: CGPoint(x: -11, y: -10))
+        path.closeSubpath()
+        ship = SKShapeNode(path: path)
+        ship.strokeColor = .cyan
+        ship.lineWidth = 2.6
+        ship.glowWidth = 2.0
+        ship.fillColor = SKColor(red: 0.04, green: 0.28, blue: 0.45, alpha: 0.8)
+        ship.zPosition = 5
+        addChild(ship)
+
+        hud.fontSize = 14
+        hud.fontColor = .white
+        hud.horizontalAlignmentMode = .left
+        hud.zPosition = 20
+        addChild(hud)
+
+        message.fontSize = 22
+        message.fontColor = .cyan
+        message.horizontalAlignmentMode = .center
+        message.zPosition = 20
+        addChild(message)
+        didChangeSize(.zero)
+    }
+
+    func restart() {
+        for rock in rocks { rock.node.removeFromParent() }
+        for shot in shots { shot.node.removeFromParent() }
+        rocks.removeAll()
+        shots.removeAll()
+        score = 0
+        lives = 3
+        wave = 1
+        isGameOver = false
+        shipVelocity = .zero
+        shipAngle = .pi / 2
+        lastUpdate = 0
+        shotCooldown = 0
+        invulnerable = 2
+        waveCooldown = 0
+        shooting = false
+        ship.isHidden = false
+        ship.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        ship.zRotation = shipAngle
+        spawnWave()
+        refreshHUD()
+    }
+
+    private func refreshHUD() {
+        hud.text = "WYNIK: \(score)    ŻYCIA: \(lives)    FALA: \(wave)"
+        if isGameOver { message.text = "KONIEC GRY" }
+        else if waveCooldown > 0 { message.text = "FALA \(wave)" }
+        else { message.text = "" }
+    }
+
+    private func spawnWave() {
+        guard size.width > 0 && size.height > 0 else { return }
+        let count = min(3 + wave, 12)
+        for _ in 0..<count {
+            var position = CGPoint.zero
+            for _ in 0..<24 {
+                position = CGPoint(x: CGFloat.random(in: 0...size.width),
+                                   y: CGFloat.random(in: 0...size.height))
+                if hypot(position.x - ship.position.x, position.y - ship.position.y) > 115 { break }
+            }
+            addRock(at: position, tier: 3,
+                    velocity: CGVector(dx: CGFloat.random(in: -62...62),
+                                       dy: CGFloat.random(in: -62...62)))
+        }
+        waveCooldown = 1.3
+    }
+
+    private func addRock(at position: CGPoint, tier: Int, velocity: CGVector) {
+        let radius = CGFloat(tier) * 11 + 5
+        let polygon = CGMutablePath()
+        for i in 0..<10 {
+            let a = CGFloat(i) * .pi * 2 / 10
+            let r = radius * CGFloat.random(in: 0.72...1.12)
+            let p = CGPoint(x: cos(a) * r, y: sin(a) * r)
+            if i == 0 { polygon.move(to: p) } else { polygon.addLine(to: p) }
+        }
+        polygon.closeSubpath()
+        let node = SKShapeNode(path: polygon)
+        node.lineWidth = 1.8
+        node.strokeColor = tier == 3 ? .systemOrange : (tier == 2 ? .systemYellow : .cyan)
+        node.fillColor = SKColor(red: 0.13, green: 0.20, blue: 0.29, alpha: 0.92)
+        node.position = position
+        node.zPosition = 3
+        addChild(node)
+        rocks.append(Rock(node: node, velocity: velocity, radius: radius, tier: tier,
+                          spin: CGFloat.random(in: -1.7...1.7)))
+    }
+
+    private func wrap(_ p: CGPoint, margin: CGFloat = 0) -> CGPoint {
+        var p = p
+        if p.x < -margin { p.x = size.width + margin }
+        else if p.x > size.width + margin { p.x = -margin }
+        if p.y < -margin { p.y = size.height + margin }
+        else if p.y > size.height + margin { p.y = -margin }
+        return p
+    }
+
+    private func fire() {
+        guard shots.count < 8 else { return }
+        let direction = CGVector(dx: cos(shipAngle), dy: sin(shipAngle))
+        let origin = CGPoint(x: ship.position.x + direction.dx * 18,
+                             y: ship.position.y + direction.dy * 18)
+        let bullet = SKShapeNode(circleOfRadius: 2.7)
+        bullet.fillColor = .cyan
+        bullet.strokeColor = .white
+        bullet.glowWidth = 3
+        bullet.position = origin
+        bullet.zPosition = 4
+        addChild(bullet)
+        shots.append(Shot(node: bullet,
+                          velocity: CGVector(dx: direction.dx * 390 + shipVelocity.dx,
+                                             dy: direction.dy * 390 + shipVelocity.dy),
+                          lifetime: 0.95))
+    }
+
+    private func explodeRock(at index: Int) {
+        let rock = rocks.remove(at: index)
+        let location = rock.node.position
+        rock.node.removeFromParent()
+        score += (4 - rock.tier) * 25
+        if rock.tier > 1 {
+            for sign in [-1.0, 1.0] {
+                let angle = CGFloat.random(in: 0...(.pi * 2))
+                let speed: CGFloat = CGFloat(72 + (4 - rock.tier) * 28)
+                addRock(at: location, tier: rock.tier - 1,
+                        velocity: CGVector(dx: cos(angle) * speed + rock.velocity.dx * CGFloat(sign) * 0.35,
+                                           dy: sin(angle) * speed + rock.velocity.dy * CGFloat(sign) * 0.35))
+            }
+        }
+    }
+
+    private func loseLife() {
+        lives -= 1
+        invulnerable = 2.2
+        ship.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        shipVelocity = .zero
+        if lives <= 0 {
+            isGameOver = true
+            ship.isHidden = true
+        }
+    }
+
+    override func update(_ currentTime: TimeInterval) {
+        if lastUpdate == 0 { lastUpdate = currentTime; return }
+        let dt = min(max(currentTime - lastUpdate, 0), 0.04)
+        lastUpdate = currentTime
+        guard size.width > 1 && size.height > 1 else { return }
+        guard !isGameOver else { return }
+        let t = CGFloat(dt)
+
+        if turnLeft { shipAngle += 3.7 * t }
+        if turnRight { shipAngle -= 3.7 * t }
+        ship.zRotation = shipAngle
+        if accelerating {
+            shipVelocity.dx += cos(shipAngle) * 215 * t
+            shipVelocity.dy += sin(shipAngle) * 215 * t
+        }
+        let drag = CGFloat(pow(0.992, dt * 60))
+        shipVelocity.dx *= drag
+        shipVelocity.dy *= drag
+        let speed = hypot(shipVelocity.dx, shipVelocity.dy)
+        if speed > 250 { shipVelocity.dx *= 250 / speed; shipVelocity.dy *= 250 / speed }
+        ship.position = wrap(CGPoint(x: ship.position.x + shipVelocity.dx * t,
+                                     y: ship.position.y + shipVelocity.dy * t), margin: 15)
+
+        shotCooldown -= dt
+        if shooting && shotCooldown <= 0 { fire(); shotCooldown = 0.18 }
+        invulnerable = max(0, invulnerable - dt)
+        ship.alpha = invulnerable > 0 ? (sin(currentTime * 17) > 0 ? 1 : 0.28) : 1
+
+        for i in rocks.indices {
+            rocks[i].node.position = wrap(
+                CGPoint(x: rocks[i].node.position.x + rocks[i].velocity.dx * t,
+                        y: rocks[i].node.position.y + rocks[i].velocity.dy * t),
+                margin: rocks[i].radius)
+            rocks[i].node.zRotation += rocks[i].spin * t
+        }
+        for i in shots.indices {
+            shots[i].node.position = wrap(
+                CGPoint(x: shots[i].node.position.x + shots[i].velocity.dx * t,
+                        y: shots[i].node.position.y + shots[i].velocity.dy * t))
+            shots[i].lifetime -= dt
+        }
+        for index in shots.indices.reversed() where shots[index].lifetime <= 0 {
+            shots[index].node.removeFromParent()
+            shots.remove(at: index)
+        }
+
+        for shotIndex in shots.indices.reversed() {
+            let hit = rocks.firstIndex {
+                hypot($0.node.position.x - shots[shotIndex].node.position.x,
+                      $0.node.position.y - shots[shotIndex].node.position.y) < $0.radius
+            }
+            if let rockIndex = hit {
+                shots[shotIndex].node.removeFromParent()
+                shots.remove(at: shotIndex)
+                explodeRock(at: rockIndex)
+            }
+        }
+
+        if invulnerable <= 0 && rocks.contains(where: {
+            hypot($0.node.position.x - ship.position.x,
+                  $0.node.position.y - ship.position.y) < $0.radius + shipRadius
+        }) { loseLife() }
+
+        if rocks.isEmpty {
+            if waveCooldown <= 0 {
+                wave += 1
+                spawnWave()
+            }
+        } else if waveCooldown > 0 { waveCooldown = max(0, waveCooldown - dt) }
+        refreshHUD()
+    }
+}
+
+struct ArcadeHoldButton: View {
+    let symbol: String
+    let title: String
+    let action: (Bool) -> Void
+    @State private var pressed = false
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: symbol).font(.title2.bold())
+            Text(title).font(.caption2.bold())
+        }
+        .foregroundStyle(pressed ? .black : .white)
+        .frame(width: 72, height: 65)
+        .background(pressed ? Color.cyan : Color.white.opacity(0.13),
+                    in: RoundedRectangle(cornerRadius: 15))
+        .contentShape(RoundedRectangle(cornerRadius: 15))
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                if !pressed { pressed = true; action(true) }
+            }
+            .onEnded { _ in pressed = false; action(false) })
+        .accessibilityLabel(title)
+    }
+}
+
+struct AsteroidsGameView: View {
+    @State private var scene = AsteroidsArcadeScene(size: CGSize(width: 390, height: 650))
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                Color(red: 0.02, green: 0.03, blue: 0.08).ignoresSafeArea()
+                SpriteView(scene: scene, options: [.ignoresSiblingOrder])
+                    .ignoresSafeArea(edges: .bottom)
+                VStack(spacing: 10) {
+                    Spacer()
+                    HStack(spacing: 9) {
+                        ArcadeHoldButton(symbol: "arrow.counterclockwise", title: "LEWO") { scene.turnLeft = $0 }
+                        ArcadeHoldButton(symbol: "arrow.clockwise", title: "PRAWO") { scene.turnRight = $0 }
+                        ArcadeHoldButton(symbol: "flame.fill", title: "CIĄG") { scene.accelerating = $0 }
+                        ArcadeHoldButton(symbol: "scope", title: "OGIEŃ") { scene.shooting = $0 }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 20)
+                    Button("NOWA GRA") { scene.restart() }
+                        .font(.caption.bold())
+                        .foregroundStyle(.cyan)
+                        .padding(.bottom, 4)
+                }
+                .padding(.bottom, max(geo.safeAreaInsets.bottom, 4))
+            }
+        }
+        .navigationTitle("ASTEROIDS")
+        .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            scene.turnLeft = false
+            scene.turnRight = false
+            scene.accelerating = false
+            scene.shooting = false
+            scene.isPaused = true
+        }
+        .onAppear { scene.isPaused = false }
+    }
+}
+
+struct MainTabsView: View {
+    var body: some View {
+        TabView {
+            ShaderLabView()
+                .tabItem { Label("SHADER LAB", systemImage: "cube.transparent.fill") }
+            NavigationStack {
+                AsteroidsGameView()
+            }
+            .tabItem { Label("ASTEROIDS", systemImage: "gamecontroller.fill") }
+        }
+        .tint(.cyan)
         .preferredColorScheme(.dark)
     }
 }
