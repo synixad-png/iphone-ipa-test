@@ -48,6 +48,52 @@ final class ShaderLabTests: XCTestCase {
 
 
 
+    func testZZDoomSharewareNativeFirstFrame() async throws {
+        // Obtain the historical shareware ZIP only inside the simulator test, not in the IPA.
+        let remote = try XCTUnwrap(URL(string: "https://www.jbserver.com/downloads/games/doom/misc/shareware/doom1.wad.zip"))
+        var request = URLRequest(url: remote)
+        request.timeoutInterval = 35
+        let archive: Data
+        do {
+            let (received, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw URLError(.badServerResponse)
+            }
+            archive = received
+        } catch {
+            throw XCTSkip("External Doom shareware archive unavailable; native gameplay smoke test not run: \(error)")
+        }
+        let root = FileManager.default.temporaryDirectory
+        let zip = root.appendingPathComponent("doom-native-test.zip")
+        let wad = root.appendingPathComponent("DOOM1.WAD")
+        try archive.write(to: zip)
+        defer {
+            try? FileManager.default.removeItem(at: zip)
+            try? FileManager.default.removeItem(at: wad)
+        }
+        XCTAssertEqual(zip.path.withCString { zipPath in
+            wad.path.withCString { wadPath in
+                doom_bridge_extract_shareware_zip(zipPath, wadPath)
+            }
+        }, 0, "Shareware ZIP must yield valid original WAD")
+        XCTAssertEqual(wad.path.withCString { doom_bridge_start($0) }, 1)
+        var frame = [UInt32](repeating: 0, count: 320 * 200)
+        var displayed = false
+        for _ in 0..<200 {
+            if doom_bridge_status() < 0 { break }
+            let n = frame.withUnsafeMutableBufferPointer {
+                doom_bridge_copy($0.baseAddress, Int32($0.count))
+            }
+            if n == frame.count && frame.contains(where: { $0 != 0 }) {
+                displayed = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        XCTAssertTrue(displayed, "Native Doom must render a nonblank first frame from shareware data")
+        doom_bridge_pause(1)
+    }
+
     func testSmileQuotesCatalogAndNames() {
         XCTAssertEqual(SmileQuote.catalog.count, 48)
         XCTAssertEqual(Set(SmileQuote.catalog.map(\.id)).count, 48)
