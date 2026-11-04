@@ -144,13 +144,13 @@ void DG_SetWindowTitle(const char *title) { (void)title; }
 
 static void *doom_thread(void *ignored) {
     (void)ignored;
-    char *args[] = { "doom", "-iwad", wad_filename, "-nomusic", "-nosfx", NULL };
+    char *args[] = { "doom", "-iwad", wad_filename, "-nomusic", NULL };
     // Doom writes configuration and save games to the writable app Documents directory.
     char working_directory[4096];
     snprintf(working_directory,sizeof(working_directory),"%s",wad_filename);
     char *last_slash=strrchr(working_directory,'/');
     if (last_slash) { *last_slash='\0'; chdir(working_directory); }
-    doomgeneric_Create(5, args);
+    doomgeneric_Create(4, args);
     pthread_mutex_lock(&state_mutex);
     state = 2;
     pthread_mutex_unlock(&state_mutex);
@@ -211,4 +211,5 @@ void doom_bridge_pause(int value) {
     pthread_mutex_lock(&state_mutex);
     paused = value != 0;
     pthread_mutex_unlock(&state_mutex);
+    doom_audio_set_paused(value);
 }
