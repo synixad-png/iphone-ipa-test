@@ -116,9 +116,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "shader-lab-v1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title 'SHADER LAB 3D v1 — IPA, sources and tests' \
-            --notes 'Unsigned ARM64 iPhone application, iOS 16+. Built on macOS. Includes XCTest render evidence, sources and SHA-256. Physical-device installation is not tested; sign with Sideloadly.' \
-            dist/SHADER_LAB_3D_v1_unsigned.ipa dist/SHADER_LAB_3D_v1_ZRODLA.zip \
-            dist/SHADER_LAB_3D_v1_TESTY.zip dist/verification.json dist/SHA256SUMS.txt dist/test-summary.json
+          TAG="shader-lab-v1-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # GitHub Releases sometimes returns temporary 502/404 upload errors.
+          # Keep the verified IPA and sources as mandatory outputs; Actions artifact quota is independent.
+          for attempt in 1 2 3 4 5; do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              break
+            fi
+            if gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                 --title 'SHADER LAB 3D + ASTEROIDS — iOS IPA' \
+                 --notes 'Unsigned ARM64 universal iPhone/iPad application, iOS 16+. Automated XCTest and simulator verification. Sign with Sideloadly. Physical device not tested.'; then
+              break
+            fi
+            if [[ "$attempt" == "5" ]]; then exit 1; fi
+            sleep 8
+          done
+          for attempt in 1 2 3 4 5; do
+            if gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+              dist/SHADER_LAB_3D_v1_unsigned.ipa dist/SHADER_LAB_3D_v1_ZRODLA.zip \
+              dist/SHADER_LAB_3D_v1_TESTY.zip dist/verification.json dist/SHA256SUMS.txt dist/test-summary.json; then
+              break
+            fi
+            if [[ "$attempt" == "5" ]]; then exit 1; fi
+            sleep 8
+          done
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets | map(.name) | index("SHADER_LAB_3D_v1_unsigned.ipa")' | grep -Eq '^[0-9]+$'
