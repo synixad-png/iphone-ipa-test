@@ -8,6 +8,7 @@ import CoreGraphics
 struct DoomSharewareView: View {
     @State private var importPresented = false
     @State private var loading = false
+    @State private var downloading = false
     @State private var statusText = "Wybierz legalną wersję DOOM1.WAD (shareware), aby uruchomić grę."
     @State private var screenshot: UIImage?
     @State private var hasWad = false
@@ -18,6 +19,7 @@ struct DoomSharewareView: View {
     private let height = 200
     private let poll = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
     private let downloadURL = URL(string: "https://www.doomarchive.com/ListFiles.php?ContentsFolderId=216&FolderId=216")!
+    private let zipURL = URL(string: "https://www.jbserver.com/downloads/games/doom/misc/shareware/doom1.wad.zip")!
 
     private var wadURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -190,6 +192,15 @@ struct DoomSharewareView: View {
             }
             Divider().overlay(LabStyle.border)
             Button {
+                downloadOriginalShareware()
+            } label: {
+                Label(downloading ? "Pobieranie shareware..." : "POBIERZ DOOM SHAREWARE",
+                      systemImage: "arrow.down.to.line")
+                    .font(.subheadline.bold())
+            }
+            .buttonStyle(LabPrimaryButtonStyle())
+            .disabled(downloading || started)
+            Button {
                 importPresented = true
             } label: {
                 Label(hasWad ? "Zmień WAD (po restarcie)" : "IMPORTUJ SHAREWARE WAD",
@@ -216,6 +227,37 @@ struct DoomSharewareView: View {
         }
     }
 
+    private func downloadOriginalShareware() {
+        guard !started && !downloading else { return }
+        downloading = true
+        statusText = "Pobieranie archiwum DOOM shareware 1.9..."
+        URLSession.shared.downloadTask(with: zipURL) { downloaded, response, error in
+            guard error == nil, let downloaded,
+                  (response as? HTTPURLResponse)?.statusCode == 200 else {
+                DispatchQueue.main.async {
+                    downloading = false
+                    statusText = "Serwer shareware jest niedostępny. Możesz pobrać archiwum ręcznie i wskazać DOOM1.WAD."
+                }
+                return
+            }
+            let result = downloaded.path.withCString { source in
+                wadURL.path.withCString { destination in
+                    doom_bridge_extract_shareware_zip(source, destination)
+                }
+            }
+            DispatchQueue.main.async {
+                downloading = false
+                if result == 0 {
+                    hasWad = true
+                    statusText = "Pobrano i zweryfikowano oryginalne dane shareware."
+                    start()
+                } else {
+                    statusText = "Nie udało się rozpakować shareware (kod \(result)). Wczytaj DOOM1.WAD ręcznie."
+                }
+            }
+        }.resume()
+    }
+
     private func start() {
         guard hasWad, !started else { return }
         started = true
@@ -230,7 +272,7 @@ struct DoomSharewareView: View {
     }
 
     private func releaseAllKeys() {
-        for key: Int32 in [0xac, 0xad, 0xae, 0xaf, 0xa3, 0xa2, 27, 13, 9] {
+        for key in [Int32](arrayLiteral: 0xac, 0xad, 0xae, 0xaf, 0xa3, 0xa2, 27, 13, 9) {
             doom_bridge_key(key, 0)
         }
     }
