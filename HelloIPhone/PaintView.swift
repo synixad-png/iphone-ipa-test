@@ -37,13 +37,16 @@ final class PaintDocument: ObservableObject {
     @Published var isEraser = false
     @Published private(set) var revision = 0
 
+    private let shouldPersist: Bool
+
     private static var storage: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("shader-lab-paint.json")
     }
 
-    init() {
-        if let bytes = try? Data(contentsOf: Self.storage),
+    init(loadExisting: Bool = true) {
+        shouldPersist = loadExisting
+        if loadExisting, let bytes = try? Data(contentsOf: Self.storage),
            let saved = try? JSONDecoder().decode([PaintStroke].self, from: bytes) {
             strokes = saved.filter { !$0.points.isEmpty }
         }
@@ -80,7 +83,7 @@ final class PaintDocument: ObservableObject {
 
     private func changed() {
         revision += 1
-        if let bytes = try? JSONEncoder().encode(strokes) {
+        if shouldPersist, let bytes = try? JSONEncoder().encode(strokes) {
             try? bytes.write(to: Self.storage, options: .atomic)
         }
     }
@@ -91,7 +94,7 @@ final class PaintDocument: ObservableObject {
         format.opaque = true
         return UIGraphicsImageRenderer(size: size, format: format).image { renderer in
             UIColor.white.setFill()
-            renderer.fill(CGRect(origin: .zero, size: size))
+            renderer.cgContext.fill(CGRect(origin: .zero, size: size))
             let context = renderer.cgContext
             for stroke in strokes {
                 draw(stroke, in: context, size: size)
