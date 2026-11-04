@@ -1,0 +1,67 @@
+name: Buduj testowy IPA (bez platnego konta Apple)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Pobierz projekt
+        uses: actions/checkout@v4
+      - name: Wersja Xcode
+        run: xcodebuild -version
+      - name: Sprawdz projekt i wspoldzielony schemat
+        run: |
+          plutil -lint HelloIPhone.xcodeproj/project.pbxproj
+          xcodebuild -list -project HelloIPhone.xcodeproj
+      - name: Kompiluj natywna aplikacje iPhone (bez podpisu)
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project HelloIPhone.xcodeproj \
+            -scheme HelloIPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+      - name: Spakuj IPA dla Sideloadly
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/HelloIPhone.app"
+          test -d "$APP"
+          mkdir -p dist/Payload
+          ditto "$APP" dist/Payload/HelloIPhone.app
+          cd dist
+          /usr/bin/zip -qry HelloIPhone_unsigned.ipa Payload
+          /usr/bin/unzip -t HelloIPhone_unsigned.ipa | tail -1
+          test -s HelloIPhone_unsigned.ipa
+      - name: Zweryfikuj IPA, ARM64 i platforme iOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_ipa.py dist/HelloIPhone_unsigned.ipa | tee dist/verification.json
+          shasum -a 256 dist/HelloIPhone_unsigned.ipa | tee dist/SHA256SUMS.txt
+      - name: Udostepnij IPA do pobrania
+        uses: actions/upload-artifact@v4
+        with:
+          name: HelloIPhone_unsigned_IPA
+          path: |
+            dist/HelloIPhone_unsigned.ipa
+            dist/verification.json
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
