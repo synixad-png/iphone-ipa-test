@@ -852,6 +852,21 @@ final class AsteroidsArcadeScene: SKScene {
                 y: min(size.height, max(0, ship.position.y * size.height / oldSize.height))
             )
             shieldRing.position = ship.position
+            let fx = size.width / oldSize.width
+            let fy = size.height / oldSize.height
+            for i in rocks.indices {
+                rocks[i].node.position = CGPoint(x: rocks[i].node.position.x * fx,
+                                                y: rocks[i].node.position.y * fy)
+            }
+            for i in shots.indices {
+                shots[i].node.position = CGPoint(x: shots[i].node.position.x * fx,
+                                                y: shots[i].node.position.y * fy)
+                shots[i].previous = shots[i].node.position
+            }
+            for i in bonuses.indices {
+                bonuses[i].node.position = CGPoint(x: bonuses[i].node.position.x * fx,
+                                                  y: bonuses[i].node.position.y * fy)
+            }
         }
         // Faint perspective-free vector grid: CRT arcade feel without distracting from silhouettes.
         if backdropGrid.parent == nil { backdropGrid.zPosition = -9; addChild(backdropGrid) }
@@ -973,6 +988,8 @@ final class AsteroidsArcadeScene: SKScene {
         boostCooldown = 0
         rapidFireTime = 0
         shooting = false
+        moveAnalog = .zero
+        aimAnalog = .zero
         ship.isHidden = false
         ship.position = CGPoint(x: size.width / 2, y: size.height / 2)
         ship.zRotation = shipAngle
