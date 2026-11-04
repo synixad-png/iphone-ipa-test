@@ -23,6 +23,11 @@ jobs:
           { xcodebuild -version; sw_vers; xcodebuild -showsdks; } | tee dist/build-environment.txt
           plutil -lint HelloIPhone.xcodeproj/project.pbxproj
           xcodebuild -list -project HelloIPhone.xcodeproj
+      - name: Build native DOOM engine for physical iOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build_doom_ios.sh iphoneos | tee dist/doom-engine-device.log
       - name: Build ARM64 for physical iPhone without signing
         shell: bash
         run: |
@@ -49,6 +54,11 @@ jobs:
           echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
           xcrun simctl boot "$SIM_UDID"
           xcrun simctl bootstatus "$SIM_UDID" -b
+      - name: Build native DOOM engine for iOS Simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build_doom_ios.sh iphonesimulator | tee dist/doom-engine-simulator.log
       - name: XCTest - all 35 renders, five modes, PBR controls, unlit and camera
         shell: bash
         run: |
@@ -97,7 +107,11 @@ jobs:
         run: |
           set -euo pipefail
           git archive --format=zip --output=dist/SHADER_LAB_3D_v1_ZRODLA.zip HEAD
-          (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png iPad-smoke.txt test-summary.json simulator-tests.log device-build.log build-environment.txt verification.json SHA256SUMS.txt)
+          # Distribute corresponding GPL engine sources together with the adapter.
+          test -f DoomSource/doomgeneric/doomgeneric.c
+          zip -qry dist/SHADER_LAB_3D_v1_ZRODLA.zip DoomSource/doomgeneric -x '*.o'
+          zip -q dist/SHADER_LAB_3D_v1_ZRODLA.zip LICENSE_DOOM_ENGINE.txt
+          (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png iPad-smoke.txt test-summary.json simulator-tests.log device-build.log doom-engine-device.log doom-engine-simulator.log build-environment.txt verification.json SHA256SUMS.txt)
           if [[ -f dist/App-iPad-Simulator.png ]]; then (cd dist && zip -q SHADER_LAB_3D_v1_TESTY.zip App-iPad-Simulator.png); fi
       - name: Upload GitHub Actions artifact
         continue-on-error: true
