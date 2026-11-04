@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 
 @main
 struct HelloIPhoneApp: App {
+    @UIApplicationDelegateAdaptor(GameOrientationDelegate.self) private var orientationDelegate
     var body: some Scene {
         WindowGroup { MainTabsView() }
     }
@@ -765,6 +766,8 @@ final class AsteroidsArcadeScene: SKScene {
     var turnRight = false
     var accelerating = false
     var shooting = false
+    var moveAnalog = CGVector.zero
+    var aimAnalog = CGVector.zero
     private(set) var shieldTime: TimeInterval = 0
     private(set) var boostCooldown: TimeInterval = 0
     private(set) var rapidFireTime: TimeInterval = 0
@@ -1210,13 +1213,25 @@ final class AsteroidsArcadeScene: SKScene {
         rapidFireTime = max(0, rapidFireTime - dt)
         boostCooldown = max(0, boostCooldown - dt)
 
-        if turnLeft { shipAngle += 3.7 * t }
-        if turnRight { shipAngle -= 3.7 * t }
+        let moveMagnitude = min(1, hypot(moveAnalog.dx, moveAnalog.dy))
+        let aimMagnitude = min(1, hypot(aimAnalog.dx, aimAnalog.dy))
+        if aimMagnitude > 0.20 {
+            shipAngle = atan2(aimAnalog.dy, aimAnalog.dx)
+        } else if moveMagnitude > 0.20 {
+            shipAngle = atan2(moveAnalog.dy, moveAnalog.dx)
+        } else {
+            if turnLeft { shipAngle += 3.7 * t }
+            if turnRight { shipAngle -= 3.7 * t }
+        }
         ship.zRotation = shipAngle
-        shipFlame.isHidden = !accelerating
-        if accelerating {
-            shipVelocity.dx += cos(shipAngle) * 225 * t
-            shipVelocity.dy += sin(shipAngle) * 225 * t
+        let isThrusting = accelerating || moveMagnitude > 0.20
+        let thrustX = moveMagnitude > 0.20 ? moveAnalog.dx : cos(shipAngle)
+        let thrustY = moveMagnitude > 0.20 ? moveAnalog.dy : sin(shipAngle)
+        let thrustScale = moveMagnitude > 0.20 ? moveMagnitude : 1
+        shipFlame.isHidden = !isThrusting
+        if isThrusting {
+            shipVelocity.dx += thrustX * 225 * t * thrustScale
+            shipVelocity.dy += thrustY * 225 * t * thrustScale
             // Engine exhaust inherits ship velocity, with stochastic velocity and finite lifetime.
             exhaustAccumulator += t*44
             while exhaustAccumulator >= 1 {
@@ -1243,7 +1258,10 @@ final class AsteroidsArcadeScene: SKScene {
 
         shieldRing.position = ship.position
         shotCooldown -= dt
-        if shooting && shotCooldown <= 0 { fire(); shotCooldown = rapidFireTime > 0 ? 0.075 : 0.18 }
+        if (shooting || aimMagnitude > 0.20) && shotCooldown <= 0 {
+            fire()
+            shotCooldown = rapidFireTime > 0 ? 0.075 : 0.18
+        }
         invulnerable = max(0, invulnerable - dt)
         ship.alpha = invulnerable > 0 ? (sin(currentTime * 17) > 0 ? 1 : 0.28) : 1
 
