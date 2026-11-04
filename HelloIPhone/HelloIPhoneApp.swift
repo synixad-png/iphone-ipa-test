@@ -197,7 +197,7 @@ enum ShaderScene {
         let fill = SCNNode(); fill.name = "fill"
         fill.light = SCNLight(); fill.light?.type = .ambient; fill.light?.intensity = 100
         scene.rootNode.addChildNode(fill)
-        let model = SCNNode(); 
+        let model = SCNNode(); model.name = "model"
         model.eulerAngles = SCNVector3(-0.15, 0.35, 0)
         scene.rootNode.addChildNode(model)
         update(scene, shape: shape, shading: shading, color: color, metalness: metalness, roughness: roughness, spinning: false, effect: effect, lightPreset: lightPreset, lightPower: lightPower)
