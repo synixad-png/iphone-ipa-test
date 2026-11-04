@@ -1,6 +1,7 @@
 import XCTest
 import SceneKit
 import SpriteKit
+import SwiftUI
 import Metal
 @testable import HelloIPhone
 
@@ -47,6 +48,37 @@ final class ShaderLabTests: XCTestCase {
 
 
 
+
+    func testLandscapeAndTouchAnalogSceneState() {
+        let supported = Bundle.main.object(forInfoDictionaryKey: "UISupportedInterfaceOrientations") as? [String] ?? []
+        XCTAssertTrue(supported.contains("UIInterfaceOrientationPortrait"),
+                      "The application must return to portrait after fullscreen games")
+        XCTAssertTrue(supported.contains("UIInterfaceOrientationLandscapeLeft"),
+                      "Fullscreen games require landscape left")
+        XCTAssertTrue(supported.contains("UIInterfaceOrientationLandscapeRight"),
+                      "Fullscreen games require landscape right")
+        let scene = AsteroidsArcadeScene(size: CGSize(width: 390, height: 660))
+        scene.moveAnalog = CGVector(dx: 0.8, dy: -0.3)
+        scene.aimAnalog = CGVector(dx: -0.8, dy: 0.4)
+        XCTAssertEqual(scene.moveAnalog.dx, 0.8)
+        XCTAssertEqual(scene.aimAnalog.dy, 0.4)
+        scene.moveAnalog = .zero
+        scene.aimAnalog = .zero
+        XCTAssertEqual(scene.moveAnalog.dx, 0)
+        XCTAssertEqual(scene.aimAnalog.dy, 0)
+    }
+
+    func testFullscreenGameViewsInstantiateWithoutWad() {
+        let arcade = AsteroidsArcadeScene(size: CGSize(width: 320, height: 220))
+        let arcadeController = UIHostingController(rootView: AsteroidsLandscapeView(scene: arcade, close: {}))
+        arcadeController.loadViewIfNeeded()
+        XCTAssertNotNil(arcadeController.view)
+        let doom = DoomLandscapeView(frame: nil, move: { _ in }, aim: { _ in },
+                                     interact: { _ in }, menu: { _ in }, close: {})
+        let doomController = UIHostingController(rootView: doom)
+        doomController.loadViewIfNeeded()
+        XCTAssertNotNil(doomController.view)
+    }
 
     func testDoomNativeSFXMixerAndPanning() {
         // Original Doom 8-bit PCM through the real AudioToolbox mixing backend.
