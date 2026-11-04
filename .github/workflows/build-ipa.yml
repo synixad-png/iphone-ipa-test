@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   build-ipa:
+    if: ${{ github.event.repository.private == false }}
     runs-on: macos-15
     timeout-minutes: 25
     steps:
@@ -129,7 +130,7 @@ jobs:
             dist/SHADER_LAB_3D_v1_TESTY.zip
           if-no-files-found: error
           retention-days: 7
-      - name: Save verified files in this private repository release
+      - name: Save verified files in public repository release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
