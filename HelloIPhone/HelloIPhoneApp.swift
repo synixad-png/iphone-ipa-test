@@ -1562,6 +1562,8 @@ struct MainTabsView: View {
                 .tabItem { Label("PAINT", systemImage: "paintbrush.pointed.fill") }
             SmileQuotesView()
                 .tabItem { Label("HUMOR", systemImage: "face.smiling.fill") }
+            DoomSharewareView()
+                .tabItem { Label("DOOM", systemImage: "bolt.shield.fill") }
         }
         .tint(.cyan)
         .preferredColorScheme(.dark)
