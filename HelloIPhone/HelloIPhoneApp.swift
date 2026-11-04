@@ -317,6 +317,86 @@ struct ModelView: UIViewRepresentable {
     }
 }
 
+
+enum LabStyle {
+    static let background = Color(red: 0.035, green: 0.052, blue: 0.09)
+    static let panel = Color(red: 0.075, green: 0.10, blue: 0.155)
+    static let accent = Color(red: 0.28, green: 0.90, blue: 1.0)
+    static let muted = Color(red: 0.63, green: 0.73, blue: 0.82)
+    static let border = Color.white.opacity(0.14)
+}
+
+struct LabSectionTitle: View {
+    let title: String
+    let symbol: String
+    var body: some View {
+        Label(title, systemImage: symbol)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .tracking(1.0)
+            .foregroundStyle(LabStyle.accent)
+    }
+}
+
+struct LabPanelModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LabStyle.panel, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(LabStyle.border, lineWidth: 1))
+    }
+}
+
+extension View {
+    func labPanel() -> some View { modifier(LabPanelModifier()) }
+}
+
+struct LabChipStyle: ButtonStyle {
+    let active: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(active ? LabStyle.background : Color.white)
+            .padding(.horizontal, 8)
+            .background(active ? LabStyle.accent : Color.white.opacity(configuration.isPressed ? 0.22 : 0.09),
+                        in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(active ? LabStyle.accent : LabStyle.border, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.78 : 1)
+    }
+}
+
+struct LabPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(LabStyle.background)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(LabStyle.accent.opacity(configuration.isPressed ? 0.65 : 1),
+                        in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct LabValueSlider: View {
+    let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var body: some View {
+        VStack(spacing: 7) {
+            HStack {
+                Text(title).font(.subheadline)
+                Spacer()
+                Text("\(Int(value * 100))%")
+                    .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(LabStyle.accent)
+                    .monospacedDigit()
+            }
+            Slider(value: $value, in: range)
+                .tint(LabStyle.accent)
+                .accessibilityLabel(title)
+        }
+    }
+}
+
 struct ShaderLabView: View {
     @State private var shape: Shape3D = .sphere
     @State private var shading: Shading3D = .pbr
@@ -348,128 +428,62 @@ struct ShaderLabView: View {
         ("Fiolet", UIColor(red: 0.58, green: 0.35, blue: 0.95, alpha: 1), .purple)
     ]
     var body: some View {
-        ZStack {
-            Color(red: 0.035, green: 0.055, blue: 0.10).ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("SHADER LAB 3D").font(.title2.bold()).tracking(1.2)
-                            Text("Natywny podgląd 3D · SceneKit").font(.caption).foregroundStyle(.cyan)
-                        }
-                        Spacer()
-                        Image(systemName: "cube.transparent.fill").font(.title).foregroundStyle(.cyan)
-                    }
-                    ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness, spinning: spinning, effect: effect, lightPreset: lightPreset,
-                              lightPower: lightPower, color: swatches[selectedColor].1,
-                              knotRevision: knotRevision, importedRevision: importedRevision,
-                              clipIndex: clipIndex, playGLB: playGLB)
-                        .frame(height: 315)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.12)))
-                    Text("Przeciągnij palcem, aby obracać · uszczypnij, aby przybliżyć lub oddalić").font(.caption2).foregroundStyle(.white.opacity(0.7))
-                    Text("BRYŁA").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(Shape3D.allCases) { item in
-                                Button(item.rawValue) {
-                                    shape = item
-                                    if item == .knot && ShaderScene.knot == nil { showKnotPicker = true }
-                                    if item == .imported && ShaderScene.imported == nil { showGLBImporter = true }
-                                }
-                                    .padding(.horizontal, 12).padding(.vertical, 9)
-                                    .background(shape == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
-                                    .foregroundStyle(shape == item ? .black : .white)
+        GeometryReader { layout in
+            let wide = layout.size.width >= 780
+            ZStack {
+                LabStyle.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack(alignment: .center, spacing: 12) {
+                            Image(systemName: "cube.transparent.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(LabStyle.accent)
+                                .frame(width: 48, height: 48)
+                                .background(LabStyle.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 14))
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("SHADER LAB")
+                                    .font(.system(size: wide ? 28 : 22, weight: .bold, design: .rounded))
+                                Text("Studio materiałów i modeli 3D")
+                                    .font(.subheadline)
+                                    .foregroundStyle(LabStyle.muted)
                             }
+                            Spacer(minLength: 0)
+                            Text("3D / METAL")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(LabStyle.accent)
+                                .padding(.horizontal, 10).padding(.vertical, 7)
+                                .background(LabStyle.accent.opacity(0.1), in: Capsule())
                         }
-                    }
-                    Text("EFEKT POWIERZCHNI").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(SurfaceFX.allCases) { item in
-                                Button(item.rawValue) { effect = item }
-                                    .padding(.horizontal, 12).padding(.vertical, 9)
-                                    .background(effect == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
-                                    .foregroundStyle(effect == item ? .black : .white)
+                        if wide {
+                            HStack(alignment: .top, spacing: 18) {
+                                previewPanel(wide: true)
+                                    .frame(maxWidth: .infinity)
+                                settingsPanel(wide: true)
+                                    .frame(maxWidth: .infinity)
                             }
+                        } else {
+                            previewPanel(wide: false)
+                            settingsPanel(wide: false)
                         }
-                    }
-                    if shape == .knot {
-                        Button(ShaderScene.knot == nil ? "Wczytaj oryginalny GLB" : "Podmień model GLB") {
-                            showKnotPicker = true
-                        }.foregroundStyle(.cyan)
-                        if ShaderScene.knot == nil {
-                            Text("Wybierz przesłany plik ASTEROIDY_CHROMOWY_WEZEL_BEZ_KOLOROW_v1(1).glb z aplikacji Pliki. Model zostanie zapisany na urządzeniu.")
-                                .font(.caption).foregroundStyle(.white.opacity(0.7))
+                        HStack {
+                            Image(systemName: "checkmark.shield")
+                            Text("Renderowanie natywne · SceneKit / Metal · iOS 16+")
                         }
+                        .font(.caption2)
+                        .foregroundStyle(LabStyle.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                     }
-                    VStack(alignment: .leading, spacing: 10) {
-                        Button {
-                            showGLBImporter = true
-                        } label: {
-                            Label(importing ? "WCZYTYWANIE..." : "WCZYTAJ GLB Z PLIKÓW", systemImage: "square.and.arrow.down")
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.cyan)
-                        }.disabled(importing)
-                        if shape == .imported {
-                            Text(ShaderScene.imported == nil ? "Wybierz plik GLB. Obsługiwane są materiały PBR, tekstury i animacje glTF." : "Model: \(importedName)")
-                                .font(.caption).foregroundStyle(.white.opacity(0.75))
-                            if let asset = ShaderScene.imported, !asset.animations.isEmpty {
-                                Picker("Animacja", selection: $clipIndex) {
-                                    ForEach(Array(asset.animations.enumerated()), id: \.offset) { item in
-                                        Text(item.element.name.isEmpty ? "Animacja \(item.offset + 1)" : item.element.name)
-                                            .tag(item.offset)
-                                    }
-                                }.pickerStyle(.menu).tint(.cyan)
-                                Toggle("Odtwarzaj animację", isOn: $playGLB).tint(.cyan)
-                            } else if ShaderScene.imported != nil {
-                                Text("Ten model nie zawiera animacji.")
-                                    .font(.caption).foregroundStyle(.white.opacity(0.65))
-                            }
-                        }
-                    }
-                                        Text("MODEL CIENIOWANIA").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
-                    Picker("Cieniowanie", selection: $shading) {
-                        ForEach(Shading3D.allCases) { item in Text(item.rawValue).tag(item) }
-                    }.pickerStyle(.menu).tint(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10).background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-                    HStack(spacing: 14) {
-                        ForEach(swatches.indices, id: \.self) { index in
-                            Button { selectedColor = index } label: {
-                                Circle().fill(swatches[index].2).frame(width: 33, height: 33)
-                                    .overlay(Circle().stroke(.white, lineWidth: selectedColor == index ? 3 : 0))
-                            }.accessibilityLabel(swatches[index].0)
-                        }
-                        Spacer()
-                        Toggle("Obrót", isOn: $spinning).tint(.cyan).fixedSize()
-                    }
-                    VStack(spacing: 12) {
-                        HStack { Text("Metaliczność"); Spacer(); Text("\(Int(metalness * 100))%") }
-                        Slider(value: $metalness, in: 0...1).tint(.cyan)
-                        HStack { Text("Chropowatość"); Spacer(); Text("\(Int(roughness * 100))%") }
-                        Slider(value: $roughness, in: 0...1).tint(.cyan)
-                    }
-                    .font(.subheadline)
-                    .disabled(shading != .pbr)
-                    Text("OŚWIETLENIE").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
-                    Picker("Scena światła", selection: $lightPreset) {
-                        ForEach(LightPreset.allCases) { preset in Text(preset.rawValue).tag(preset) }
-                    }.pickerStyle(.menu).tint(.white)
-                    HStack { Text("Moc lamp"); Spacer(); Text("\(Int(lightPower * 100))%") }
-                        .font(.subheadline)
-                    Slider(value: $lightPower, in: 0...2).tint(.cyan)
-                    Text("Efekty siatki, neonu, szkła i ceramiki są oddzielne od modelu cieniowania. Neon to materiał emisyjny, bez dodatkowego bloom; szkło wykorzystuje przezroczystość, bez ray tracingu.")
-                        .font(.caption).foregroundStyle(.white.opacity(0.68))
-                    Text("Metaliczność i chropowatość wpływają na PBR. Modele Phong, Blinn i Lambert wykorzystują własne równania oświetlenia; tryb stały nie reaguje na światło. PBR wykorzystuje Metal i mapę otoczenia do odbić.")
-                        .font(.caption).foregroundStyle(.white.opacity(0.68))
-                    Text("SHADER LAB 3D · iOS 16+ · v1.1")
-                        .font(.caption2.monospaced()).foregroundStyle(.white.opacity(0.45)).frame(maxWidth: .infinity)
+                    .padding(.horizontal, wide ? 24 : 14)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: 1180)
+                    .frame(maxWidth: .infinity)
                 }
-                .foregroundStyle(.white)
-                .padding(18)
+                .scrollIndicators(.hidden)
             }
         }
+        .foregroundStyle(.white)
+        .tint(LabStyle.accent)
         .preferredColorScheme(.dark)
         .onAppear {
             if ShaderScene.imported == nil && FileManager.default.fileExists(atPath: savedGLBURL.path) {
@@ -540,6 +554,196 @@ struct ShaderLabView: View {
         .alert("Model GLB", isPresented: Binding(get: { knotError != nil }, set: { if !$0 { knotError = nil } })) {
             Button("OK") { knotError = nil }
         } message: { Text(knotError ?? "") }
+    }
+
+
+    @ViewBuilder private func previewPanel(wide: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                LabSectionTitle(title: "PODGLĄD", symbol: "viewfinder")
+                Spacer()
+                Text(shape.rawValue)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(LabStyle.muted)
+                    .lineLimit(1)
+            }
+            ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness,
+                      spinning: spinning, effect: effect, lightPreset: lightPreset,
+                      lightPower: lightPower, color: swatches[selectedColor].1,
+                      knotRevision: knotRevision, importedRevision: importedRevision,
+                      clipIndex: clipIndex, playGLB: playGLB)
+                .frame(height: wide ? 430 : 300)
+                .background(LabStyle.background, in: RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LabStyle.border, lineWidth: 1))
+                .accessibilityLabel("Podgląd modelu 3D. Obrót palcem i przybliżanie gestem szczypania.")
+            Label("Obracaj palcem · przybliżaj dwoma palcami", systemImage: "hand.draw")
+                .font(.caption)
+                .foregroundStyle(LabStyle.muted)
+                .lineLimit(2)
+            if shape == .imported && ShaderScene.imported != nil {
+                Label(importedName.isEmpty ? "Model GLB" : importedName, systemImage: "shippingbox")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(LabStyle.accent)
+                    .lineLimit(2)
+            }
+        }
+        .labPanel()
+    }
+
+    @ViewBuilder private func settingsPanel(wide: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
+                LabSectionTitle(title: "BIBLIOTEKA MODELI", symbol: "square.stack.3d.up")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: wide ? 142 : 132), spacing: 8)], spacing: 8) {
+                    ForEach(Shape3D.allCases) { item in
+                        Button {
+                            shape = item
+                            if item == .knot && ShaderScene.knot == nil { showKnotPicker = true }
+                            if item == .imported && ShaderScene.imported == nil { showGLBImporter = true }
+                        } label: {
+                            HStack(spacing: 7) {
+                                Image(systemName: item == .imported ? "square.and.arrow.down" : "cube")
+                                    .font(.caption)
+                                Text(item.rawValue)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.76)
+                            }
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                        }
+                        .buttonStyle(LabChipStyle(active: shape == item))
+                        .accessibilityAddTraits(shape == item ? .isSelected : [])
+                    }
+                }
+                if shape == .knot {
+                    Button {
+                        showKnotPicker = true
+                    } label: {
+                        Label(ShaderScene.knot == nil ? "Wczytaj chromowy węzeł GLB" : "Podmień chromowy węzeł",
+                              systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(LabPrimaryButtonStyle())
+                    if ShaderScene.knot == nil {
+                        Text("Wybierz plik chromowego węzła GLB w aplikacji Pliki.")
+                            .font(.caption).foregroundStyle(LabStyle.muted)
+                    }
+                }
+                Button {
+                    showGLBImporter = true
+                } label: {
+                    Label(importing ? "Wczytywanie modelu..." : "Importuj własny plik GLB",
+                          systemImage: "square.and.arrow.down.on.square")
+                }
+                .buttonStyle(LabPrimaryButtonStyle())
+                .disabled(importing)
+                if importing {
+                    ProgressView("Przetwarzanie geometrii, tekstur i animacji")
+                        .font(.caption)
+                        .tint(LabStyle.accent)
+                }
+                if shape == .imported {
+                    if let asset = ShaderScene.imported {
+                        Text("Import zachowuje materiały PBR i tekstury oryginalnego modelu.")
+                            .font(.caption).foregroundStyle(LabStyle.muted)
+                        if !asset.animations.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("ANIMACJA").font(.caption.bold()).foregroundStyle(LabStyle.muted)
+                                Picker("Wybierz animację", selection: $clipIndex) {
+                                    ForEach(Array(asset.animations.enumerated()), id: \.offset) { item in
+                                        Text(item.element.name.isEmpty ? "Animacja \(item.offset + 1)" : item.element.name)
+                                            .tag(item.offset)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .pickerStyle(.menu)
+                                Toggle("Odtwarzaj animację GLB", isOn: $playGLB)
+                                    .font(.subheadline)
+                                    .tint(LabStyle.accent)
+                            }
+                        } else {
+                            Label("Model bez klipów animacji", systemImage: "info.circle")
+                                .font(.caption).foregroundStyle(LabStyle.muted)
+                        }
+                    } else {
+                        Label("Wybierz plik GLB, aby zobaczyć model", systemImage: "info.circle")
+                            .font(.caption).foregroundStyle(LabStyle.muted)
+                    }
+                }
+            }
+            .labPanel()
+
+            VStack(alignment: .leading, spacing: 12) {
+                LabSectionTitle(title: "WYGLĄD POWIERZCHNI", symbol: "circle.hexagongrid")
+                if shape == .imported {
+                    Text("Materiały importowanego GLB pozostają oryginalne. Zmieniaj oświetlenie w panelu poniżej.")
+                        .font(.caption).foregroundStyle(LabStyle.muted)
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: wide ? 125 : 110), spacing: 8)], spacing: 8) {
+                        ForEach(SurfaceFX.allCases) { item in
+                            Button(item.rawValue) { effect = item }
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(maxWidth: .infinity, minHeight: 38)
+                                .buttonStyle(LabChipStyle(active: effect == item))
+                        }
+                    }
+                    HStack {
+                        Text("Model cieniowania")
+                        Spacer()
+                        Picker("Cieniowanie", selection: $shading) {
+                            ForEach(Shading3D.allCases) { item in Text(item.rawValue).tag(item) }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    .font(.subheadline)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("KOLOR").font(.caption.bold()).foregroundStyle(LabStyle.muted)
+                        HStack(spacing: 14) {
+                            ForEach(swatches.indices, id: \.self) { index in
+                                Button {
+                                    selectedColor = index
+                                } label: {
+                                    Circle()
+                                        .fill(swatches[index].2)
+                                        .frame(width: 36, height: 36)
+                                        .overlay(Circle().stroke(.white, lineWidth: selectedColor == index ? 3 : 0))
+                                        .frame(width: 44, height: 44)
+                                }
+                                .accessibilityLabel(swatches[index].0)
+                                .accessibilityAddTraits(selectedColor == index ? .isSelected : [])
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    Toggle("Automatyczny obrót", isOn: $spinning)
+                        .font(.subheadline).tint(LabStyle.accent)
+                    VStack(spacing: 10) {
+                        LabValueSlider(title: "Metaliczność", value: $metalness, range: 0...1)
+                        LabValueSlider(title: "Chropowatość", value: $roughness, range: 0...1)
+                    }
+                    .disabled(shading != .pbr)
+                    .opacity(shading == .pbr ? 1 : 0.45)
+                }
+            }
+            .labPanel()
+
+            VStack(alignment: .leading, spacing: 12) {
+                LabSectionTitle(title: "OŚWIETLENIE", symbol: "sun.max")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: wide ? 125 : 110), spacing: 8)], spacing: 8) {
+                    ForEach(LightPreset.allCases) { preset in
+                        Button(preset.rawValue) { lightPreset = preset }
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                            .buttonStyle(LabChipStyle(active: lightPreset == preset))
+                    }
+                }
+                LabValueSlider(title: "Moc lamp", value: $lightPower, range: 0...2)
+                Text("PBR korzysta z mapy otoczenia. Neon emituje światło bez bloom, a szkło używa przezroczystości bez ray tracingu.")
+                    .font(.caption)
+                    .foregroundStyle(LabStyle.muted)
+            }
+            .labPanel()
+        }
     }
 
     private func loadImported(_ url: URL, filename: String) {
