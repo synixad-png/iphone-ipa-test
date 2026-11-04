@@ -26,6 +26,7 @@ with zipfile.ZipFile(path) as z:
     assert header[1] == 0x0100000c, "Oczekiwany ARM64"
     assert header[3] == 2, "Oczekiwany plik wykonywalny"
     offset, platform, signed = 32, None, False
+    rpaths = []
     for _ in range(header[4]):
         cmd, size = struct.unpack_from("<II", data, offset)
         assert size >= 8 and offset + size <= len(data)
@@ -33,9 +34,18 @@ with zipfile.ZipFile(path) as z:
             platform = struct.unpack_from("<I", data, offset + 8)[0]
         if cmd == 0x1d:
             signed = True
+        if cmd == 0x8000001c:
+            path_offset = struct.unpack_from("<I", data, offset + 8)[0]
+            assert 12 <= path_offset < size
+            string_start = offset + path_offset
+            raw = data[string_start:offset + size].split(b"\\0", 1)[0]
+            rpaths.append(raw.decode("utf-8"))
         offset += size
+    embedded = root + "Frameworks/GLTFKit2.framework/GLTFKit2"
+    assert embedded in names, "Brak wbudowanej biblioteki GLTFKit2 dla importu GLB"
+    assert "@executable_path/Frameworks" in rpaths, "Brak LC_RPATH - aplikacja nie uruchomi dynamicznej GLTFKit2"
     assert platform == 2, "Plik musi byc zbudowany dla fizycznego iPhone, nie symulatora"
     assert not signed, "Oczekiwany niepodpisany IPA"
     assert root + "embedded.mobileprovision" not in names
-    result = {"ipa": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "app": root, "bundle_id": info["CFBundleIdentifier"], "executable": exe_path, "architecture": "arm64", "platform": "iOS device", "device_family": info["UIDeviceFamily"], "minimum_ios": info["MinimumOSVersion"], "signed": signed, "zip_crc": "OK"}
+    result = {"ipa": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "app": root, "bundle_id": info["CFBundleIdentifier"], "executable": exe_path, "architecture": "arm64", "platform": "iOS device", "device_family": info["UIDeviceFamily"], "minimum_ios": info["MinimumOSVersion"], "signed": signed, "rpaths": rpaths, "embedded_glb_framework": True, "zip_crc": "OK"}
     print(json.dumps(result, ensure_ascii=False, indent=2))
