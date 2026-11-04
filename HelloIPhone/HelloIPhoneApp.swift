@@ -1558,6 +1558,8 @@ struct MainTabsView: View {
                 AsteroidsGameView()
             }
             .tabItem { Label("ASTEROIDS", systemImage: "gamecontroller.fill") }
+            PaintView()
+                .tabItem { Label("PAINT", systemImage: "paintbrush.pointed.fill") }
         }
         .tint(.cyan)
         .preferredColorScheme(.dark)
