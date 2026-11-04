@@ -1,5 +1,6 @@
 import XCTest
 import SceneKit
+import SpriteKit
 import Metal
 @testable import HelloIPhone
 
@@ -42,6 +43,52 @@ final class ShaderLabTests: XCTestCase {
     }
     func scene(_ mode: Shading3D, shape: Shape3D = .sphere, metal: Double = 0.75, rough: Double = 0.22) -> SCNScene {
         ShaderScene.makeScene(shape: shape, shading: mode, color: color, metalness: metal, roughness: rough)
+    }
+
+
+    func testAsteroidsSweptProjectileCollision() {
+        // A projectile moves from left to right across a small rock in one frame.
+        XCTAssertTrue(AsteroidsArcadeScene.segmentIntersectsCircle(
+            CGPoint(x:0,y:0), CGPoint(x:100,y:0),
+            center:CGPoint(x:50,y:3), radius:6))
+        XCTAssertFalse(AsteroidsArcadeScene.segmentIntersectsCircle(
+            CGPoint(x:0,y:0), CGPoint(x:100,y:0),
+            center:CGPoint(x:50,y:20), radius:6))
+        XCTAssertTrue(AsteroidsArcadeScene.segmentIntersectsCircle(
+            CGPoint(x:2,y:2), CGPoint(x:2,y:2),
+            center:CGPoint(x:3,y:2), radius:2))
+    }
+
+    func testAsteroidsElasticImpulseConservesMomentum() {
+        let a = CGVector(dx:130,dy:0), b = CGVector(dx:-10,dy:0)
+        let ma:CGFloat = 27, mb:CGFloat = 8
+        let (afterA, afterB) = AsteroidsArcadeScene.elasticImpulse(
+            a,b,massA:ma,massB:mb,normal:CGVector(dx:1,dy:0))
+        XCTAssertEqual(ma*a.dx + mb*b.dx, ma*afterA.dx + mb*afterB.dx, accuracy:0.001)
+        XCTAssertLessThan(afterA.dx, a.dx)
+        XCTAssertGreaterThan(afterB.dx, b.dx)
+        let initialEnergy = ma*a.dx*a.dx + mb*b.dx*b.dx
+        let finalEnergy = ma*afterA.dx*afterA.dx + mb*afterB.dx*afterB.dx
+        XCTAssertLessThanOrEqual(finalEnergy, initialEnergy + 0.01)
+        let separating = AsteroidsArcadeScene.elasticImpulse(
+            CGVector(dx:-10,dy:0),CGVector(dx:10,dy:0),
+            massA:ma,massB:mb,normal:CGVector(dx:1,dy:0))
+        XCTAssertEqual(separating.0.dx,-10)
+        XCTAssertEqual(separating.1.dx,10)
+    }
+
+    func testAsteroidsSceneRestartAndWave() {
+        let scene = AsteroidsArcadeScene(size:CGSize(width:390,height:620))
+        let view = SKView(frame:CGRect(x:0,y:0,width:390,height:620))
+        view.presentScene(scene)
+        XCTAssertEqual(scene.lives,3)
+        XCTAssertEqual(scene.wave,1)
+        XCTAssertFalse(scene.isGameOver)
+        scene.activateBoost()
+        XCTAssertEqual(scene.boostCooldown,6)
+        scene.restart()
+        XCTAssertEqual(scene.boostCooldown,0)
+        XCTAssertEqual(scene.lives,3)
     }
 
     func testGLBWithEmbeddedTextureAndNodeAnimation() throws {
