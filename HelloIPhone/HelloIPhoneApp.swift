@@ -2,6 +2,7 @@ import SwiftUI
 import SceneKit
 import Metal
 import SpriteKit
+import UniformTypeIdentifiers
 
 @main
 struct HelloIPhoneApp: App {
@@ -11,7 +12,7 @@ struct HelloIPhoneApp: App {
 }
 
 enum Shape3D: String, CaseIterable, Identifiable {
-    case sphere = "Kula", cube = "Sześcian", torus = "Torus", cone = "Stożek", cylinder = "Walec", pyramid = "Ostrosłup", capsule = "Kapsuła"
+    case sphere = "Kula", cube = "Sześcian", torus = "Torus", cone = "Stożek", cylinder = "Walec", pyramid = "Ostrosłup", capsule = "Kapsuła", knot = "Chromowy węzeł"
     var id: String { rawValue }
     var geometry: SCNGeometry {
         switch self {
@@ -24,6 +25,7 @@ enum Shape3D: String, CaseIterable, Identifiable {
         case .cylinder: return SCNCylinder(radius: 0.8, height: 1.8)
         case .pyramid: return SCNPyramid(width: 1.8, height: 1.9, length: 1.8)
         case .capsule: return SCNCapsule(capRadius: 0.7, height: 2)
+        case .knot: return SCNSphere(radius: 0.85)
         }
     }
 }
@@ -52,7 +54,74 @@ enum LightPreset: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+
+enum GLBKnot {
+    enum ErrorKind: Error { case invalid }
+    static let filename = "ASTEROIDY_CHROMOWY_WEZEL.glb"
+    static var saved: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent(filename)
+    }
+    static func parse(_ url: URL) throws -> SCNGeometry {
+        let file = try Data(contentsOf: url)
+        func read32(_ i: Int) throws -> UInt32 {
+            guard i >= 0 && i+4 <= file.count else { throw ErrorKind.invalid }
+            return file.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: i, as: UInt32.self) }
+        }
+        guard try read32(0) == 0x46546c67, try read32(4) == 2,
+              try read32(8) == UInt32(file.count) else { throw ErrorKind.invalid }
+        var json = Data(), bin = Data(), offset = 12
+        while offset+8 <= file.count {
+            let len = try Int(read32(offset)), kind = try read32(offset+4)
+            offset += 8
+            guard offset+len <= file.count else { throw ErrorKind.invalid }
+            if kind == 0x4e4f534a { json = file.subdata(in: offset..<offset+len) }
+            if kind == 0x004e4942 { bin = file.subdata(in: offset..<offset+len) }
+            offset += len
+        }
+        guard let root = try JSONSerialization.jsonObject(with: json) as? [String:Any],
+              let meshes = root["meshes"] as? [[String:Any]],
+              let primitives = meshes.first?["primitives"] as? [[String:Any]],
+              let prim = primitives.first,
+              let attrs = prim["attributes"] as? [String:Int],
+              let pi = attrs["POSITION"], let ni = attrs["NORMAL"],
+              let ii = prim["indices"] as? Int,
+              let accessors = root["accessors"] as? [[String:Any]],
+              let views = root["bufferViews"] as? [[String:Any]] else { throw ErrorKind.invalid }
+        func read(_ id: Int, _ ty: String, _ format: Int) throws -> (Data,Int,Int) {
+            guard accessors.indices.contains(id) else { throw ErrorKind.invalid }
+            let a = accessors[id]
+            guard a["type"] as? String == ty, a["componentType"] as? Int == format,
+                  let vi = a["bufferView"] as? Int, views.indices.contains(vi),
+                  let count = a["count"] as? Int, count > 0 else { throw ErrorKind.invalid }
+            let v = views[vi], bpc = format == 5123 ? 2 : 4
+            let size = (ty == "VEC3" ? 3 : 1)*bpc
+            let stride = v["byteStride"] as? Int ?? size
+            let start = (v["byteOffset"] as? Int ?? 0) + (a["byteOffset"] as? Int ?? 0)
+            let end = start+(count-1)*stride+size
+            guard start >= 0, stride >= size, end <= bin.count else { throw ErrorKind.invalid }
+            return (bin.subdata(in: start..<end),count,stride)
+        }
+        let (pos, n, ps) = try read(pi,"VEC3",5126)
+        let (normal, nc, ns) = try read(ni,"VEC3",5126)
+        guard nc == n, accessors.indices.contains(ii),
+              let fmt = accessors[ii]["componentType"] as? Int,
+              fmt == 5125 || fmt == 5123 else { throw ErrorKind.invalid }
+        let (idx, ic, bytes) = try read(ii,"SCALAR",fmt)
+        guard ic % 3 == 0, bytes == (fmt == 5123 ? 2 : 4) else { throw ErrorKind.invalid }
+        let p = SCNGeometrySource(data: pos, semantic: .vertex, vectorCount: n,
+                                   usesFloatComponents: true, componentsPerVector: 3,
+                                   bytesPerComponent: 4, dataOffset: 0, dataStride: ps)
+        let v = SCNGeometrySource(data: normal, semantic: .normal, vectorCount: n,
+                                   usesFloatComponents: true, componentsPerVector: 3,
+                                   bytesPerComponent: 4, dataOffset: 0, dataStride: ns)
+        let faces = SCNGeometryElement(data: idx, primitiveType: .triangles,
+                                       primitiveCount: ic/3, bytesPerIndex: bytes)
+        return SCNGeometry(sources: [p,v], elements: [faces])
+    }
+}
+
 enum ShaderScene {
+    static var knot: SCNGeometry?
     static let background = UIColor(red: 0.035, green: 0.055, blue: 0.1, alpha: 1)
     static let environment: UIImage = {
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
@@ -139,10 +208,11 @@ enum ShaderScene {
         guard let model = scene.rootNode.childNode(withName: "model", recursively: false) else { return }
         let shapeID = "shape:" + shape.rawValue
         if model.geometry?.name != shapeID {
-            model.geometry = shape.geometry
+            model.geometry = shape == .knot ? (knot ?? shape.geometry) : shape.geometry
             model.geometry?.name = shapeID
         }
-        model.geometry?.materials = [material(shading, color: color, metalness: metalness, roughness: roughness, effect: effect)]
+        let chrome = shape == .knot
+        model.geometry?.materials = [material(shading, color: chrome ? UIColor(red: 0.92, green: 0.92, blue: 0.94, alpha: 1) : color, metalness: chrome ? 0.93 : metalness, roughness: chrome ? 0.115 : roughness, effect: effect)]
         let palette: (UIColor, UIColor)
         switch lightPreset {
         case .studio: palette = (.white, .cyan)
@@ -156,7 +226,7 @@ enum ShaderScene {
         let rim = scene.rootNode.childNode(withName: "rim", recursively: false)?.light
         rim?.color = palette.1; rim?.intensity = 650 * power
         if spinning && model.action(forKey: "spin") == nil {
-            model.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 9)), forKey: "spin")
+            model.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: shape == .knot ? 16 : 9)), forKey: "spin")
         } else if !spinning {
             model.removeAction(forKey: "spin")
         }
@@ -188,10 +258,16 @@ struct ModelView: UIViewRepresentable {
     let lightPreset: LightPreset
     let lightPower: Double
     let color: UIColor
+    let knotRevision: Int
 
     func makeUIView(context: Context) -> SCNView { ShaderScene.makeView() }
     func updateUIView(_ view: SCNView, context: Context) {
         guard let scene = view.scene else { return }
+        if shape == .knot, let geometry = ShaderScene.knot {
+            let node = scene.rootNode.childNode(withName: "model", recursively: false)
+            if node?.geometry !== geometry { node?.geometry = geometry; node?.geometry?.name = "shape:" + shape.rawValue }
+        }
+        _ = knotRevision
         ShaderScene.update(scene, shape: shape, shading: shading, color: color,
                            metalness: metalness, roughness: roughness, spinning: spinning,
                            effect: effect, lightPreset: lightPreset, lightPower: lightPower)
@@ -207,6 +283,9 @@ struct ShaderLabView: View {
     @State private var roughness = 0.18
     @State private var spinning = true
     @State private var selectedColor = 0
+    @State private var showKnotPicker = false
+    @State private var knotRevision = 0
+    @State private var knotError: String?
     @State private var effect: SurfaceFX = .normal
     @State private var lightPreset: LightPreset = .studio
     @State private var lightPower = 1.0
@@ -230,7 +309,8 @@ struct ShaderLabView: View {
                         Image(systemName: "cube.transparent.fill").font(.title).foregroundStyle(.cyan)
                     }
                     ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness, spinning: spinning, effect: effect, lightPreset: lightPreset,
-                              lightPower: lightPower, color: swatches[selectedColor].1)
+                              lightPower: lightPower, color: swatches[selectedColor].1,
+                              knotRevision: knotRevision)
                         .frame(height: 315)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                         .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.12)))
@@ -239,7 +319,10 @@ struct ShaderLabView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(Shape3D.allCases) { item in
-                                Button(item.rawValue) { shape = item }
+                                Button(item.rawValue) {
+                                    shape = item
+                                    if item == .knot && ShaderScene.knot == nil { showKnotPicker = true }
+                                }
                                     .padding(.horizontal, 12).padding(.vertical, 9)
                                     .background(shape == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
                                     .foregroundStyle(shape == item ? .black : .white)
@@ -255,6 +338,15 @@ struct ShaderLabView: View {
                                     .background(effect == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
                                     .foregroundStyle(effect == item ? .black : .white)
                             }
+                        }
+                    }
+                    if shape == .knot {
+                        Button(ShaderScene.knot == nil ? "Wczytaj oryginalny GLB" : "Podmień model GLB") {
+                            showKnotPicker = true
+                        }.foregroundStyle(.cyan)
+                        if ShaderScene.knot == nil {
+                            Text("Wybierz przesłany plik ASTEROIDY_CHROMOWY_WEZEL_BEZ_KOLOROW_v1(1).glb z aplikacji Pliki. Model zostanie zapisany na urządzeniu.")
+                                .font(.caption).foregroundStyle(.white.opacity(0.7))
                         }
                     }
                     Text("MODEL CIENIOWANIA").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
@@ -300,6 +392,30 @@ struct ShaderLabView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            if ShaderScene.knot == nil && FileManager.default.fileExists(atPath: GLBKnot.saved.path) {
+                if let model = try? GLBKnot.parse(GLBKnot.saved) {
+                    ShaderScene.knot = model
+                    knotRevision += 1
+                }
+            }
+        }
+        .fileImporter(isPresented: $showKnotPicker, allowedContentTypes: [.data, .item]) { result in
+            do {
+                let source = try result.get()
+                let access = source.startAccessingSecurityScopedResource()
+                defer { if access { source.stopAccessingSecurityScopedResource() } }
+                let model = try GLBKnot.parse(source)
+                let dest = GLBKnot.saved
+                if FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.removeItem(at: dest) }
+                try FileManager.default.copyItem(at: source, to: dest)
+                ShaderScene.knot = model
+                knotRevision += 1
+            } catch { knotError = "Nie udało się odczytać GLB: \(error.localizedDescription)" }
+        }
+        .alert("Model GLB", isPresented: Binding(get: { knotError != nil }, set: { if !$0 { knotError = nil } })) {
+            Button("OK") { knotError = nil }
+        } message: { Text(knotError ?? "") }
     }
 }
 
