@@ -89,7 +89,8 @@ jobs:
         run: |
           set -euo pipefail
           git archive --format=zip --output=dist/SHADER_LAB_3D_v1_ZRODLA.zip HEAD
-          (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png iPad-smoke.txt test-summary.json simulator-tests.log device-build.log build-environment.txt verification.json SHA256SUMS.txt)\n          if [[ -f dist/App-iPad-Simulator.png ]]; then (cd dist && zip -q SHADER_LAB_3D_v1_TESTY.zip App-iPad-Simulator.png); fi
+          (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png iPad-smoke.txt test-summary.json simulator-tests.log device-build.log build-environment.txt verification.json SHA256SUMS.txt)
+          if [[ -f dist/App-iPad-Simulator.png ]]; then (cd dist && zip -q SHADER_LAB_3D_v1_TESTY.zip App-iPad-Simulator.png); fi
       - name: Upload GitHub Actions artifact
         continue-on-error: true
         uses: actions/upload-artifact@v4
