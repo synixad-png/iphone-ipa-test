@@ -49,6 +49,49 @@ final class ShaderLabTests: XCTestCase {
 
 
 
+    private func findUIElement<T: UIView>(_ type: T.Type, in root: UIView) -> T? {
+        if let element = root as? T { return element }
+        for child in root.subviews {
+            if let result = findUIElement(type, in: child) { return result }
+        }
+        return nil
+    }
+
+    private func isInScrollView(_ element: UIView) -> Bool {
+        var parent = element.superview
+        while let view = parent {
+            if view is UIScrollView { return true }
+            parent = view.superview
+        }
+        return false
+    }
+
+    func testPaintCanvasHasNoScrollableAncestor() {
+        let controller = UIHostingController(rootView: PaintView())
+        controller.view.frame = CGRect(x: 0, y: 0, width: 393, height: 760)
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        guard let canvas = findUIElement(PaintSurfaceView.self, in: controller.view) else {
+            XCTFail("The paint canvas must be visible on a portrait iPhone")
+            return
+        }
+        XCTAssertFalse(isInScrollView(canvas),
+                       "Touch drawing must not drag a parent scroll view")
+    }
+
+    func testShaderLabPreviewHasNoScrollableAncestor() {
+        let controller = UIHostingController(rootView: ShaderLabView())
+        controller.view.frame = CGRect(x: 0, y: 0, width: 393, height: 760)
+        controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        guard let preview = findUIElement(SCNView.self, in: controller.view) else {
+            XCTFail("Shader Lab preview must be visible on a portrait iPhone")
+            return
+        }
+        XCTAssertFalse(isInScrollView(preview),
+                       "Model rotation and pinch should not move the entire screen")
+    }
+
     func testLandscapeAndTouchAnalogSceneState() {
         let supported = Bundle.main.object(forInfoDictionaryKey: "UISupportedInterfaceOrientations") as? [String] ?? []
         XCTAssertTrue(supported.contains("UIInterfaceOrientationPortrait"),
