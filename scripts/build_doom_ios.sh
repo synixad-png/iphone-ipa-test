@@ -41,8 +41,14 @@ for ARCH in "${ARCHS[@]}"; do
       printf 'static int doom_ios_system(const char *cmd) { (void)cmd; return -1; }\n' > "$INPUT"
       sed 's/system(/doom_ios_system(/g' "$SRC/i_system.c" >> "$INPUT"
     fi
+    if [[ "$name" == "i_sound" ]]; then
+      # doomgeneric's sound interface includes SDL_mixer only for SDL platforms.
+      # iOS replaces that backend with the native AudioQueue implementation.
+      INPUT="$BUILD/i_sound_ios.c"
+      sed 's@#include <SDL_mixer.h>@/* Native iOS AudioQueue instead of SDL_mixer */@' "$SRC/i_sound.c" > "$INPUT"
+    fi
     xcrun --sdk "$SDK" clang -target "$TARGET" -isysroot "$SDKROOT" \
-      -std=gnu11 -O2 -fcommon -w -DNORMALUNIX -D_DEFAULT_SOURCE \
+      -std=gnu11 -O2 -fcommon -w -DFEATURE_SOUND=1 -DNORMALUNIX -D_DEFAULT_SOURCE \
       -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 \
       -I"$SRC" -c "$INPUT" -o "$DIR/$name.o"
   done
@@ -50,6 +56,10 @@ for ARCH in "${ARCHS[@]}"; do
     -std=gnu11 -O2 -fcommon -w -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 \
     -I"$SRC" -I"$ROOT/HelloIPhone" \
     -c "$ROOT/HelloIPhone/DoomBridge.c" -o "$DIR/DoomBridge.o"
+  xcrun --sdk "$SDK" clang -target "$TARGET" -isysroot "$SDKROOT" \
+    -std=gnu11 -O2 -fcommon -w -DFEATURE_SOUND=1 \
+    -I"$SRC" -I"$ROOT/HelloIPhone" \
+    -c "$ROOT/HelloIPhone/DoomAudio.c" -o "$DIR/DoomAudio.o"
   THIN="$BUILD/libdoom_$ARCH.a"
   rm -f "$THIN"
   xcrun ar rcs "$THIN" "$DIR/"*.o
