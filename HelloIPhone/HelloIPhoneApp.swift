@@ -1410,125 +1410,97 @@ struct ArcadeHoldButton: View {
 
 struct AsteroidsGameView: View {
     @State private var scene = AsteroidsArcadeScene(size: CGSize(width: 390, height: 650))
+    @State private var fullScreen = false
 
     var body: some View {
         GeometryReader { geo in
             let wide = geo.size.width >= 700
-            let compact = geo.size.height < 600
-            let keyHeight: CGFloat = compact ? 54 : (wide ? 78 : 62)
-            let keyWidth: CGFloat = wide ? 105 : max(62, min(86, (geo.size.width - 62) / 4))
-            let gap: CGFloat = wide ? 16 : 8
+            let stickDiameter = min(wide ? 145 : 118, max(92, geo.size.width * 0.23))
             ZStack {
                 LabStyle.background.ignoresSafeArea()
                 VStack(spacing: 0) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         Image(systemName: "gamecontroller.fill")
                             .foregroundStyle(LabStyle.accent)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 32, height: 32)
                             .background(LabStyle.accent.opacity(0.12),
                                         in: RoundedRectangle(cornerRadius: 10))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("ASTEROIDS")
-                                .font(.system(size: wide ? 23 : 19, weight: .bold, design: .rounded))
-                            Text("ARCADE · SURVIVAL")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(LabStyle.muted)
-                        }
-                        Spacer()
+                        Text("ASTEROIDS")
+                            .font(.system(size: wide ? 22 : 17, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                        Spacer(minLength: 1)
                         Button {
-                            scene.turnLeft = false
-                            scene.turnRight = false
-                            scene.accelerating = false
-                            scene.shooting = false
+                            scene.activateBoost()
+                        } label: {
+                            Image(systemName: "bolt.fill")
+                                .frame(width: 33, height: 36)
+                        }
+                        .accessibilityLabel("Dopalacz")
+                        .foregroundStyle(.orange)
+                        .background(.orange.opacity(0.12),
+                                    in: RoundedRectangle(cornerRadius: 9))
+                        Button {
                             scene.restart()
                         } label: {
-                            Label("Od nowa", systemImage: "arrow.clockwise")
-                                .font(.system(size: 12, weight: .semibold))
-                                .padding(.horizontal, 12)
-                                .frame(height: 38)
+                            Image(systemName: "arrow.clockwise")
+                                .frame(width: 33, height: 36)
                         }
+                        .accessibilityLabel("Nowa gra")
                         .foregroundStyle(LabStyle.accent)
-                        .background(LabStyle.panel, in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(LabStyle.border))
-                        .accessibilityLabel("Rozpocznij nową grę")
+                        .background(LabStyle.panel, in: RoundedRectangle(cornerRadius: 9))
+                        Button {
+                            fullScreen = true
+                        } label: {
+                            Label("PEŁNY EKRAN", systemImage: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.65)
+                                .padding(.horizontal, 9)
+                                .frame(height: 36)
+                        }
+                        .foregroundStyle(.black)
+                        .background(LabStyle.accent, in: RoundedRectangle(cornerRadius: 9))
                     }
-                    .padding(.horizontal, wide ? 24 : 14)
-                    .padding(.vertical, compact ? 6 : 10)
-                    .frame(maxWidth: 1100)
-                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, wide ? 22 : 10)
+                    .padding(.vertical, 8)
 
                     SpriteView(scene: scene, options: [.ignoresSiblingOrder])
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color(red: 0.018, green: 0.025, blue: 0.065))
-                        .overlay(alignment: .bottomLeading) {
-                            if !compact {
-                                Text("PRZETRWAJ JAK NAJDŁUŻEJ · ZBIERAJ BONUSY")
-                                    .font(.system(size: wide ? 11 : 9, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(LabStyle.muted)
-                                    .padding(.leading, 12).padding(.bottom, 9)
-                                    .allowsHitTesting(false)
+                        .overlay(alignment: .bottom) {
+                            HStack(alignment: .bottom) {
+                                GameJoystick(title: "RUCH", tint: .cyan,
+                                             diameter: stickDiameter) {
+                                    scene.moveAnalog = $0
+                                }
+                                Spacer(minLength: 12)
+                                GameJoystick(title: "CEL · OGIEŃ", tint: .orange,
+                                             diameter: stickDiameter) {
+                                    scene.aimAnalog = $0
+                                }
                             }
+                            .padding(.horizontal, wide ? 24 : 14)
+                            .padding(.bottom, 14)
                         }
-                        .overlay(Rectangle().strokeBorder(LabStyle.border, lineWidth: 1))
-                        .accessibilityLabel("Pole rozgrywki ASTEROIDS")
-
-                    VStack(spacing: compact ? 6 : 10) {
-                        HStack(spacing: gap) {
-                            ArcadeHoldButton(symbol: "arrow.counterclockwise", title: "LEWO",
-                                             action: { scene.turnLeft = $0 },
-                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
-                            ArcadeHoldButton(symbol: "arrow.clockwise", title: "PRAWO",
-                                             action: { scene.turnRight = $0 },
-                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
-                            ArcadeHoldButton(symbol: "flame.fill", title: "CIĄG",
-                                             action: { scene.accelerating = $0 },
-                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
-                            ArcadeHoldButton(symbol: "scope", title: "OGIEŃ",
-                                             action: { scene.shooting = $0 },
-                                             buttonWidth: keyWidth, buttonHeight: keyHeight)
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        HStack(spacing: 10) {
-                            Button {
-                                scene.activateBoost()
-                            } label: {
-                                Label("DOPALACZ", systemImage: "bolt.fill")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .frame(minWidth: 110, minHeight: compact ? 34 : 42)
-                                    .padding(.horizontal, 12)
-                                    .background(Color.orange.opacity(0.16),
-                                                in: RoundedRectangle(cornerRadius: 11))
-                                    .overlay(RoundedRectangle(cornerRadius: 11)
-                                        .strokeBorder(Color.orange.opacity(0.45)))
-                            }
-                            .foregroundStyle(.orange)
-                            Spacer(minLength: 0)
-                            Text(wide ? "S · osłona    R · szybki ogień    + · życie" : "S · osłona   R · ogień   + · życie")
-                                .font(.system(size: wide ? 11 : 9, weight: .medium))
-                                .foregroundStyle(LabStyle.muted)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.78)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        .frame(maxWidth: wide ? 620 : 450)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, compact ? 7 : 11)
-                    .padding(.bottom, compact ? 7 : 12)
-                    .frame(maxWidth: .infinity)
-                    .background(LabStyle.background)
+                        .accessibilityLabel("Pole gry ASTEROIDS z dwoma analogami")
                 }
-                .foregroundStyle(.white)
             }
         }
         .navigationBarHidden(true)
+        .fullScreenCover(isPresented: $fullScreen) {
+            AsteroidsLandscapeView(scene: scene) {
+                fullScreen = false
+            }
+        }
         .onDisappear {
+            scene.moveAnalog = .zero
+            scene.aimAnalog = .zero
             scene.turnLeft = false
             scene.turnRight = false
             scene.accelerating = false
             scene.shooting = false
-            scene.isPaused = true
+            if !fullScreen { scene.isPaused = true }
         }
         .onAppear { scene.isPaused = false }
     }
