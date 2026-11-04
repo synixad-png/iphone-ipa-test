@@ -4,6 +4,8 @@
  classes = {};
  objectVersion = 56;
  objects = {
+  D10000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintView.swift; sourceTree = "<group>"; };
+  D10000000000000000000002 = {isa = PBXBuildFile; fileRef = D10000000000000000000001; };
   C10000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLBSceneLoader.swift; sourceTree = "<group>"; };
   C10000000000000000000004 = {isa = PBXBuildFile; fileRef = C10000000000000000000003; };
   C10000000000000000000001 = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/warrenm/GLTFKit2.git"; requirement = { kind = exactVersion; version = 0.5.15; }; };
@@ -13,9 +15,9 @@
   A10000000000000000000002 = {isa = PBXBuildFile; fileRef = A10000000000000000000001; };
   A10000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HelloIPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
   A10000000000000000000004 = {isa = PBXGroup; children = (A10000000000000000000005, A10000000000000000000006, B10000000000000000000005,); sourceTree = "<group>"; };
-  A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000001,C10000000000000000000003,); path = HelloIPhone; sourceTree = "<group>"; };
+  A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000001,C10000000000000000000003,D10000000000000000000001,); path = HelloIPhone; sourceTree = "<group>"; };
   A10000000000000000000006 = {isa = PBXGroup; children = (A10000000000000000000003,B10000000000000000000003,); name = Products; sourceTree = "<group>"; };
-  A10000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002,C10000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
+  A10000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002,C10000000000000000000004,D10000000000000000000002,); runOnlyForDeploymentPostprocessing = 0; };
   A10000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000005,); runOnlyForDeploymentPostprocessing = 0; };
   A10000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
   A1000000000000000000000A = {isa = PBXNativeTarget; buildConfigurationList = A1000000000000000000000D; buildPhases = (A10000000000000000000007,A10000000000000000000008,A10000000000000000000009,); buildRules = (); dependencies = (); name = HelloIPhone; productName = HelloIPhone; productReference = A10000000000000000000003; packageProductDependencies = (C10000000000000000000002,); productType = "com.apple.product-type.application"; };
