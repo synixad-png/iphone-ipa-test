@@ -771,12 +771,28 @@ final class AsteroidsArcadeScene: SKScene {
         var radius: CGFloat
         var tier: Int
         var spin: CGFloat
+        var mass: CGFloat
     }
     struct Shot {
         var node: SKShapeNode
         var velocity: CGVector
         var lifetime: TimeInterval
+        var previous: CGPoint
     }
+
+    // Physically integrated sparks keep their original inertia and fade smoothly.
+    struct Spark {
+        let node: SKShapeNode
+        var velocity: CGVector
+        var remaining: CGFloat
+        let total: CGFloat
+        let angularVelocity: CGFloat
+    }
+    private var sparks: [Spark] = []
+    private var exhaustAccumulator: CGFloat = 0
+    private var screenShake: CGFloat = 0
+    private var elapsed: CGFloat = 0
+    private var rockCollisionCooldown: CGFloat = 0
 
     var turnLeft = false
     var turnRight = false
@@ -812,9 +828,35 @@ final class AsteroidsArcadeScene: SKScene {
     private let hud = SKLabelNode(fontNamed: "Menlo-Bold")
     private let message = SKLabelNode(fontNamed: "Menlo-Bold")
     private let shipRadius: CGFloat = 13
+    private let bloomAlpha: CGFloat = 0.17
+    private var backdrop = SKNode()
+    private var shipFlame = SKShapeNode()
+    private var shipInner = SKShapeNode()
+    private var backdropGrid = SKNode()
+    private var pulse = SKShapeNode()
+    private var oldShipPosition = CGPoint.zero
+
+    static func segmentIntersectsCircle(_ a: CGPoint, _ b: CGPoint, center: CGPoint, radius: CGFloat) -> Bool {
+        let dx = b.x - a.x, dy = b.y - a.y
+        let lengthSquared = dx * dx + dy * dy
+        let t = lengthSquared > 0.00001 ?
+            max(0, min(1, ((center.x-a.x)*dx + (center.y-a.y)*dy)/lengthSquared)) : 0
+        let cx = a.x + t*dx, cy = a.y + t*dy
+        return hypot(cx-center.x, cy-center.y) <= radius
+    }
+
+    static func elasticImpulse(_ a: CGVector, _ b: CGVector,
+                               massA: CGFloat, massB: CGFloat, normal: CGVector) -> (CGVector, CGVector) {
+        let relative = (b.dx-a.dx)*normal.dx + (b.dy-a.dy)*normal.dy
+        if relative >= 0 { return (a, b) }
+        let restitution: CGFloat = 0.86
+        let impulse = -(1+restitution)*relative / (1/massA + 1/massB)
+        return (CGVector(dx: a.dx - impulse*normal.dx/massA, dy: a.dy - impulse*normal.dy/massA),
+                CGVector(dx: b.dx + impulse*normal.dx/massB, dy: b.dy + impulse*normal.dy/massB))
+    }
 
     override func didMove(to view: SKView) {
-        backgroundColor = SKColor(red: 0.018, green: 0.025, blue: 0.065, alpha: 1)
+        backgroundColor = SKColor(red: 0.012, green: 0.019, blue: 0.045, alpha: 1)
         scaleMode = .resizeFill
         guard ship.parent == nil else { return }
         configureNodes()
@@ -827,6 +869,7 @@ final class AsteroidsArcadeScene: SKScene {
         message.position = CGPoint(x: size.width / 2, y: size.height / 2)
         for star in stars { star.removeFromParent() }
         stars.removeAll()
+        backdropGrid.removeAllChildren()
         guard size.width > 0 && size.height > 0 else { return }
         // Keep the ship inside the new playfield after iPad split-view or rotation.
         if oldSize.width > 0 && oldSize.height > 0 && ship.parent != nil {
@@ -836,9 +879,33 @@ final class AsteroidsArcadeScene: SKScene {
             )
             shieldRing.position = ship.position
         }
-        for _ in 0..<80 {
+        // Faint perspective-free vector grid: CRT arcade feel without distracting from silhouettes.
+        if backdropGrid.parent == nil { backdropGrid.zPosition = -9; addChild(backdropGrid) }
+        let pitch: CGFloat = size.width > 700 ? 58 : 42
+        let vertical = Int(size.width / pitch) + 1
+        let horizontal = Int(size.height / pitch) + 1
+        if vertical * horizontal < 700 {
+            for i in 0...vertical {
+                let x = CGFloat(i)*pitch
+                let line = SKShapeNode()
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x:x,y:0)); path.addLine(to: CGPoint(x:x,y:size.height))
+                line.path = path; line.strokeColor = .cyan.withAlphaComponent(0.04)
+                line.lineWidth = 0.6; backdropGrid.addChild(line)
+            }
+            for i in 0...horizontal {
+                let y = CGFloat(i)*pitch
+                let line = SKShapeNode()
+                let path = CGMutablePath()
+                path.move(to: CGPoint(x:0,y:y)); path.addLine(to: CGPoint(x:size.width,y:y))
+                line.path = path; line.strokeColor = .cyan.withAlphaComponent(0.04)
+                line.lineWidth = 0.6; backdropGrid.addChild(line)
+            }
+        }
+        for _ in 0..<(size.width > 700 ? 150 : 90) {
             let dot = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.45...1.3))
-            dot.fillColor = .white.withAlphaComponent(CGFloat.random(in: 0.18...0.68))
+            dot.fillColor = (Bool.random() ? SKColor.cyan : SKColor.white)
+                .withAlphaComponent(CGFloat.random(in: 0.16...0.56))
             dot.strokeColor = .clear
             dot.position = CGPoint(x: CGFloat.random(in: 0...size.width),
                                    y: CGFloat.random(in: 0...size.height))
@@ -857,11 +924,31 @@ final class AsteroidsArcadeScene: SKScene {
         path.closeSubpath()
         ship = SKShapeNode(path: path)
         ship.strokeColor = .cyan
-        ship.lineWidth = 2.6
-        ship.glowWidth = 2.0
-        ship.fillColor = SKColor(red: 0.04, green: 0.28, blue: 0.45, alpha: 0.8)
+        ship.lineWidth = 2.1
+        ship.glowWidth = 5
+        ship.fillColor = SKColor(red: 0.03, green: 0.09, blue: 0.18, alpha: 0.98)
         ship.zPosition = 5
         addChild(ship)
+        let interior = CGMutablePath()
+        interior.move(to: CGPoint(x: 9, y: 0))
+        interior.addLine(to: CGPoint(x: -5, y: 5))
+        interior.move(to: CGPoint(x: 9, y: 0))
+        interior.addLine(to: CGPoint(x: -5, y: -5))
+        shipInner = SKShapeNode(path: interior)
+        shipInner.strokeColor = SKColor(red: 0.65, green: 0.95, blue: 1, alpha: 0.9)
+        shipInner.lineWidth = 1.1
+        ship.addChild(shipInner)
+        let flamePath = CGMutablePath()
+        flamePath.move(to: CGPoint(x:-7,y:6))
+        flamePath.addLine(to: CGPoint(x:-20,y:0))
+        flamePath.addLine(to: CGPoint(x:-7,y:-6))
+        shipFlame = SKShapeNode(path:flamePath)
+        shipFlame.strokeColor = .systemOrange
+        shipFlame.fillColor = .yellow.withAlphaComponent(0.3)
+        shipFlame.lineWidth = 2
+        shipFlame.glowWidth = 6
+        shipFlame.isHidden = true
+        ship.addChild(shipFlame)
         shieldRing = SKShapeNode(circleOfRadius: 23)
         shieldRing.strokeColor = .systemTeal
         shieldRing.lineWidth = 2.5
@@ -891,6 +978,11 @@ final class AsteroidsArcadeScene: SKScene {
         for node in debris { node.removeFromParent() }
         rocks.removeAll()
         shots.removeAll()
+        for spark in sparks { spark.node.removeFromParent() }
+        sparks.removeAll()
+        exhaustAccumulator = 0
+        screenShake = 0
+        elapsed = 0
         bonuses.removeAll()
         debris.removeAll()
         score = 0
@@ -910,6 +1002,7 @@ final class AsteroidsArcadeScene: SKScene {
         ship.isHidden = false
         ship.position = CGPoint(x: size.width / 2, y: size.height / 2)
         ship.zRotation = shipAngle
+        oldShipPosition = ship.position
         shieldRing.position = ship.position
         spawnWave()
         refreshHUD()
@@ -945,22 +1038,45 @@ final class AsteroidsArcadeScene: SKScene {
     private func addRock(at position: CGPoint, tier: Int, velocity: CGVector) {
         let radius = CGFloat(tier) * 11 + 5
         let polygon = CGMutablePath()
-        for i in 0..<10 {
-            let a = CGFloat(i) * .pi * 2 / 10
-            let r = radius * CGFloat.random(in: 0.72...1.12)
+        let edges = 11
+        var vertices: [CGPoint] = []
+        for i in 0..<edges {
+            let a = CGFloat(i) * .pi * 2 / CGFloat(edges)
+            let r = radius * CGFloat.random(in: 0.77...1.05)
             let p = CGPoint(x: cos(a) * r, y: sin(a) * r)
+            vertices.append(p)
             if i == 0 { polygon.move(to: p) } else { polygon.addLine(to: p) }
         }
         polygon.closeSubpath()
         let node = SKShapeNode(path: polygon)
-        node.lineWidth = 1.8
+        node.lineWidth = tier == 3 ? 2 : 1.5
         node.strokeColor = tier == 3 ? .systemOrange : (tier == 2 ? .systemYellow : .cyan)
-        node.fillColor = SKColor(red: 0.13, green: 0.20, blue: 0.29, alpha: 0.92)
+        node.glowWidth = tier == 3 ? 4 : 2.5
+        node.fillColor = SKColor(red: 0.075, green: 0.11, blue: 0.16, alpha: 0.98)
+        // Triangulated facets and fracture seams are real subpaths in local asteroid space.
+        let cracks = CGMutablePath()
+        let core = CGPoint(x: CGFloat.random(in: -3...3), y: CGFloat.random(in: -3...3))
+        for i in stride(from: 0, to: edges, by: 2) {
+            cracks.move(to: vertices[i])
+            cracks.addLine(to: core)
+            let next = vertices[(i+3)%edges]
+            cracks.addLine(to: CGPoint(x: next.x*0.55, y:next.y*0.55))
+        }
+        let seams = SKShapeNode(path:cracks)
+        seams.strokeColor = node.strokeColor.withAlphaComponent(0.24)
+        seams.lineWidth = 1
+        node.addChild(seams)
+        let inset = SKShapeNode(path: polygon)
+        inset.setScale(0.85)
+        inset.strokeColor = .white.withAlphaComponent(0.08)
+        inset.lineWidth = 0.7
+        node.addChild(inset)
         node.position = position
         node.zPosition = 3
         addChild(node)
+        let mass = CGFloat(tier*tier*tier)
         rocks.append(Rock(node: node, velocity: velocity, radius: radius, tier: tier,
-                          spin: CGFloat.random(in: -1.7...1.7)))
+                          spin: CGFloat.random(in: -1.45...1.45), mass: mass))
     }
 
     private func wrap(_ p: CGPoint, margin: CGFloat = 0) -> CGPoint {
@@ -987,7 +1103,7 @@ final class AsteroidsArcadeScene: SKScene {
         shots.append(Shot(node: bullet,
                           velocity: CGVector(dx: direction.dx * 390 + shipVelocity.dx,
                                              dy: direction.dy * 390 + shipVelocity.dy),
-                          lifetime: 0.95))
+                          lifetime: 0.95, previous: origin))
     }
 
     private func explodeRock(at index: Int) {
@@ -999,38 +1115,72 @@ final class AsteroidsArcadeScene: SKScene {
             bestScore = score
             UserDefaults.standard.set(bestScore, forKey: "asteroids.bestScore")
         }
-        burst(at: location, tint: rock.node.strokeColor, count: rock.tier == 3 ? 13 : 7)
+        let tint = rock.node.strokeColor
+        burst(at: location, tint: tint, count: rock.tier == 3 ? 31 : 19)
+        explosionRing(at: location, radius: rock.radius*2.6, tint:tint)
+        screenShake = max(screenShake, CGFloat(rock.tier)*2.6)
         if Int.random(in: 0..<100) < 13 { spawnBonus(at: location) }
         if rock.tier > 1 {
             for sign in [-1.0, 1.0] {
                 let angle = CGFloat.random(in: 0...(.pi * 2))
-                let speed: CGFloat = CGFloat(72 + (4 - rock.tier) * 28)
+                let speed: CGFloat = CGFloat(85 + (4 - rock.tier) * 24)
+                let impulse = CGVector(dx: cos(angle)*speed + CGFloat(sign)*28,
+                                       dy: sin(angle)*speed + CGFloat(sign)*18)
                 addRock(at: location, tier: rock.tier - 1,
-                        velocity: CGVector(dx: cos(angle) * speed + rock.velocity.dx * CGFloat(sign) * 0.35,
-                                           dy: sin(angle) * speed + rock.velocity.dy * CGFloat(sign) * 0.35))
+                        velocity: CGVector(dx: rock.velocity.dx + impulse.dx,
+                                           dy: rock.velocity.dy + impulse.dy))
             }
         }
     }
 
-    private func burst(at position: CGPoint, tint: SKColor, count: Int) {
-        for _ in 0..<count {
-            let dot = SKShapeNode(circleOfRadius: CGFloat.random(in: 1.4...3.0))
-            dot.fillColor = tint
-            dot.strokeColor = .clear
-            dot.glowWidth = 2
-            dot.position = position
-            dot.zPosition = 8
-            addChild(dot)
-            debris.append(dot)
-            let angle = CGFloat.random(in: 0...(.pi * 2))
-            let distance = CGFloat.random(in: 16...55)
-            let duration = Double.random(in: 0.25...0.55)
-            let move = SKAction.moveBy(x: cos(angle) * distance, y: sin(angle) * distance, duration: duration)
-            let fade = SKAction.fadeOut(withDuration: duration)
-            dot.run(.sequence([.group([move, fade]), .removeFromParent()]))
+    private func explosionRing(at position: CGPoint, radius: CGFloat, tint: SKColor) {
+        let ring = SKShapeNode(circleOfRadius: 8)
+        ring.strokeColor = tint.withAlphaComponent(0.85)
+        ring.lineWidth = 2
+        ring.glowWidth = 8
+        ring.position = position
+        ring.zPosition = 7
+        addChild(ring)
+        ring.run(.sequence([.group([
+            .scale(to: max(1, radius/8), duration: 0.33),
+            .fadeOut(withDuration: 0.33)
+        ]), .removeFromParent()]))
+    }
+
+    private func emitSpark(at position: CGPoint, velocity: CGVector,
+                           tint: SKColor, lifetime: CGFloat, shard: Bool) {
+        // Limit GPU draw calls and never retain removed particles indefinitely.
+        if sparks.count >= 240 { return }
+        let node: SKShapeNode
+        if shard {
+            let line = CGMutablePath()
+            line.move(to: CGPoint(x:-CGFloat.random(in: 3...7), y:0))
+            line.addLine(to:CGPoint(x:CGFloat.random(in: 3...7), y:0))
+            node = SKShapeNode(path:line)
+            node.strokeColor = tint
+            node.lineWidth = CGFloat.random(in: 1...2.1)
+        } else {
+            node = SKShapeNode(circleOfRadius: CGFloat.random(in: 0.8...2.5))
+            node.fillColor = tint
+            node.strokeColor = .clear
         }
-        // Keep only live particles. The actions remove their scene nodes.
-        if debris.count > 250 { debris.removeAll { $0.parent == nil } }
+        node.glowWidth = 2.7
+        node.zPosition = shard ? 6 : 8
+        node.position = position
+        addChild(node)
+        sparks.append(Spark(node:node, velocity:velocity, remaining:lifetime,
+                            total:lifetime, angularVelocity:CGFloat.random(in:-9...9)))
+    }
+
+    private func burst(at position: CGPoint, tint: SKColor, count: Int) {
+        for i in 0..<count {
+            let angle = CGFloat(i)*2*.pi/CGFloat(count) + CGFloat.random(in:-0.2...0.2)
+            let speed = CGFloat.random(in: 65...285)
+            emitSpark(at:position,
+                      velocity:CGVector(dx:cos(angle)*speed, dy:sin(angle)*speed),
+                      tint: i%4 == 0 ? .white : tint, lifetime:CGFloat.random(in:0.3...1.15),
+                      shard:i%3 == 0)
+        }
     }
 
     private func spawnBonus(at position: CGPoint) {
