@@ -1209,10 +1209,13 @@ final class AsteroidsArcadeScene: SKScene {
         boostCooldown = 6
         shieldTime = max(shieldTime, 0.7)
         burst(at: ship.position, tint: .cyan, count: 18)
+        explosionRing(at: ship.position, radius: 38, tint: .cyan)
     }
 
     private func loseLife() {
-        burst(at: ship.position, tint: .systemRed, count: 24)
+        burst(at: ship.position, tint: .systemRed, count: 35)
+        explosionRing(at: ship.position, radius: 92, tint: .systemRed)
+        screenShake = 11
         lives -= 1
         shieldTime = 1.8
         invulnerable = 2.2
@@ -1226,11 +1229,16 @@ final class AsteroidsArcadeScene: SKScene {
 
     override func update(_ currentTime: TimeInterval) {
         if lastUpdate == 0 { lastUpdate = currentTime; return }
-        let dt = min(max(currentTime - lastUpdate, 0), 0.04)
+        let dt = min(max(currentTime - lastUpdate, 0), 1.0/30.0)
         lastUpdate = currentTime
         guard size.width > 1 && size.height > 1 else { return }
         guard !isGameOver else { return }
         let t = CGFloat(dt)
+        elapsed += t
+        screenShake = max(0, screenShake - 30*t)
+        backdropGrid.position = CGPoint(
+            x: screenShake > 0.5 ? CGFloat.random(in: -screenShake...screenShake) : 0,
+            y: screenShake > 0.5 ? CGFloat.random(in: -screenShake...screenShake) : 0)
         shieldTime = max(0, shieldTime - dt)
         rapidFireTime = max(0, rapidFireTime - dt)
         boostCooldown = max(0, boostCooldown - dt)
@@ -1238,15 +1246,31 @@ final class AsteroidsArcadeScene: SKScene {
         if turnLeft { shipAngle += 3.7 * t }
         if turnRight { shipAngle -= 3.7 * t }
         ship.zRotation = shipAngle
+        shipFlame.isHidden = !accelerating
         if accelerating {
-            shipVelocity.dx += cos(shipAngle) * 215 * t
-            shipVelocity.dy += sin(shipAngle) * 215 * t
-        }
-        let drag = CGFloat(pow(0.992, dt * 60))
+            shipVelocity.dx += cos(shipAngle) * 225 * t
+            shipVelocity.dy += sin(shipAngle) * 225 * t
+            // Engine exhaust inherits ship velocity, with stochastic velocity and finite lifetime.
+            exhaustAccumulator += t*44
+            while exhaustAccumulator >= 1 {
+                exhaustAccumulator -= 1
+                let angle = shipAngle + CGFloat.random(in:-0.25...0.25)
+                let speed = CGFloat.random(in: 85...155)
+                let outlet = CGPoint(x:ship.position.x - cos(shipAngle)*12,
+                                     y:ship.position.y - sin(shipAngle)*12)
+                emitSpark(at:outlet,
+                          velocity:CGVector(dx:shipVelocity.dx-cos(angle)*speed,
+                                            dy:shipVelocity.dy-sin(angle)*speed),
+                          tint: Bool.random() ? .systemOrange : .cyan,
+                          lifetime:CGFloat.random(in:0.13...0.35), shard:false)
+            }
+        } else { exhaustAccumulator = 0 }
+        let drag = CGFloat(pow(0.993, dt * 60))
         shipVelocity.dx *= drag
         shipVelocity.dy *= drag
         let speed = hypot(shipVelocity.dx, shipVelocity.dy)
         if speed > 250 { shipVelocity.dx *= 250 / speed; shipVelocity.dy *= 250 / speed }
+        oldShipPosition = ship.position
         ship.position = wrap(CGPoint(x: ship.position.x + shipVelocity.dx * t,
                                      y: ship.position.y + shipVelocity.dy * t), margin: 15)
 
@@ -1263,7 +1287,34 @@ final class AsteroidsArcadeScene: SKScene {
                 margin: rocks[i].radius)
             rocks[i].node.zRotation += rocks[i].spin * t
         }
+        // Mass-weighted rock collisions with normal impulse and positional separation.
+        // Skip rocks on opposite wrap edges to prevent false full-screen collision responses.
+        rockCollisionCooldown = max(0, rockCollisionCooldown - t)
+        if rocks.count > 1 {
+            for i in 0..<(rocks.count-1) {
+                for j in (i+1)..<rocks.count {
+                    let pa = rocks[i].node.position, pb = rocks[j].node.position
+                    let dx = pb.x-pa.x, dy = pb.y-pa.y
+                    let distance = hypot(dx,dy)
+                    let contact = (rocks[i].radius+rocks[j].radius)*0.86
+                    if distance > 0.001 && distance < contact {
+                        let n = CGVector(dx: dx/distance, dy: dy/distance)
+                        let overlap = contact-distance
+                        let ma = rocks[i].mass, mb = rocks[j].mass
+                        rocks[i].node.position.x -= n.dx*overlap*mb/(ma+mb)
+                        rocks[i].node.position.y -= n.dy*overlap*mb/(ma+mb)
+                        rocks[j].node.position.x += n.dx*overlap*ma/(ma+mb)
+                        rocks[j].node.position.y += n.dy*overlap*ma/(ma+mb)
+                        let result = Self.elasticImpulse(rocks[i].velocity, rocks[j].velocity,
+                                                         massA:ma, massB:mb, normal:n)
+                        rocks[i].velocity = result.0
+                        rocks[j].velocity = result.1
+                    }
+                }
+            }
+        }
         for i in shots.indices {
+            shots[i].previous = shots[i].node.position
             shots[i].node.position = wrap(
                 CGPoint(x: shots[i].node.position.x + shots[i].velocity.dx * t,
                         y: shots[i].node.position.y + shots[i].velocity.dy * t))
@@ -1275,15 +1326,36 @@ final class AsteroidsArcadeScene: SKScene {
         }
 
         for shotIndex in shots.indices.reversed() {
+            let shot = shots[shotIndex]
             let hit = rocks.firstIndex {
-                hypot($0.node.position.x - shots[shotIndex].node.position.x,
-                      $0.node.position.y - shots[shotIndex].node.position.y) < $0.radius
+                let a = shot.previous, b = shot.node.position, c = $0.node.position
+                let crossedWrap = abs(b.x-a.x) > size.width*0.5 ||
+                                  abs(b.y-a.y) > size.height*0.5
+                return crossedWrap ?
+                    hypot(c.x-b.x, c.y-b.y) < $0.radius :
+                    Self.segmentIntersectsCircle(a, b, center:c, radius:$0.radius)
             }
             if let rockIndex = hit {
                 shots[shotIndex].node.removeFromParent()
                 shots.remove(at: shotIndex)
                 explodeRock(at: rockIndex)
             }
+        }
+
+        // Velocity-integrated particle physics with air resistance, spin and fading.
+        for i in sparks.indices.reversed() {
+            sparks[i].remaining -= t
+            if sparks[i].remaining <= 0 {
+                sparks[i].node.removeFromParent()
+                sparks.remove(at:i)
+                continue
+            }
+            sparks[i].velocity.dx *= CGFloat(pow(0.975, dt*60))
+            sparks[i].velocity.dy *= CGFloat(pow(0.975, dt*60))
+            sparks[i].node.position.x += sparks[i].velocity.dx*t
+            sparks[i].node.position.y += sparks[i].velocity.dy*t
+            sparks[i].node.zRotation += sparks[i].angularVelocity*t
+            sparks[i].node.alpha = max(0, sparks[i].remaining/sparks[i].total)
         }
 
         for i in bonuses.indices.reversed() {
