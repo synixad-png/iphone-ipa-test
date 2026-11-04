@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-ipa:
@@ -56,6 +56,7 @@ jobs:
           python3 scripts/verify_ipa.py dist/HelloIPhone_unsigned.ipa | tee dist/verification.json
           shasum -a 256 dist/HelloIPhone_unsigned.ipa | tee dist/SHA256SUMS.txt
       - name: Udostepnij IPA do pobrania
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: HelloIPhone_unsigned_IPA
@@ -65,3 +66,17 @@ jobs:
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
+      - name: Zapisz IPA w prywatnym wydaniu repozytorium
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd dist
+          zip -q HelloIPhone_unsigned_IPA.zip HelloIPhone_unsigned.ipa verification.json SHA256SUMS.txt
+          gh release create "ipa-build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Testowy IPA — build ${GITHUB_RUN_NUMBER}" \
+            --notes "Niepodpisana aplikacja SwiftUI dla fizycznego iPhone, ARM64, iOS 16+. Zweryfikowano strukturę IPA i SHA-256. Instalacja wymaga podpisania, np. przez Sideloadly." \
+            HelloIPhone_unsigned.ipa HelloIPhone_unsigned_IPA.zip verification.json SHA256SUMS.txt
