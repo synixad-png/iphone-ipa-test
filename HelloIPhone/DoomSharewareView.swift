@@ -15,6 +15,10 @@ struct DoomSharewareView: View {
     @State private var hasWad = false
     @State private var running = false
     @State private var started = false
+    @State private var fullScreen = false
+    @State private var moveAxis = CGVector.zero
+    @State private var aimAxis = CGVector.zero
+    @State private var analogPressed = Set<Int32>()
     @AppStorage("doom.sfx.enabled") private var effectsEnabled = true
     @AppStorage("doom.sfx.volume") private var effectsVolume: Double = 0.85
 
@@ -49,7 +53,21 @@ struct DoomSharewareView: View {
                                     .font(.caption)
                                     .foregroundStyle(LabStyle.muted)
                             }
-                            Spacer()
+                            Spacer(minLength: 3)
+                            Button {
+                                fullScreen = true
+                            } label: {
+                                Label("PEŁNY EKRAN", systemImage: "arrow.up.left.and.arrow.down.right")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                    .padding(.horizontal, 10)
+                                    .frame(height: 35)
+                            }
+                            .foregroundStyle(.black)
+                            .background(LabStyle.accent, in: RoundedRectangle(cornerRadius: 8))
+                            .disabled(!running)
+                            .opacity(running ? 1 : 0.45)
                             Text("1993")
                                 .font(.system(.caption, design: .monospaced).bold())
                                 .foregroundStyle(.orange)
@@ -79,6 +97,14 @@ struct DoomSharewareView: View {
         }
         .foregroundStyle(.white)
         .tint(LabStyle.accent)
+        .fullScreenCover(isPresented: $fullScreen) {
+            DoomLandscapeView(frame: screenshot,
+                              move: { axis in updateAxis(axis, movement: true) },
+                              aim: { axis in updateAxis(axis, movement: false) },
+                              interact: { pressed in doom_bridge_key(0xa2, pressed ? 1 : 0) },
+                              menu: { pressed in doom_bridge_key(27, pressed ? 1 : 0) },
+                              close: { fullScreen = false })
+        }
         .fileImporter(isPresented: $importPresented,
                       allowedContentTypes: [UTType(filenameExtension: "wad") ?? .data, .data]) { result in
             do {
@@ -175,6 +201,19 @@ struct DoomSharewareView: View {
                 }
             }
             .aspectRatio(4.0 / 3.0, contentMode: .fit)
+            .overlay(alignment: .bottom) {
+                HStack(alignment: .bottom) {
+                    GameJoystick(title: "RUCH", tint: .cyan, diameter: 96) {
+                        updateAxis($0, movement: true)
+                    }
+                    Spacer(minLength: 12)
+                    GameJoystick(title: "OBRÓT · OGIEŃ", tint: .red, diameter: 96) {
+                        updateAxis($0, movement: false)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 7)
+            }
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(LabStyle.border))
             Text(statusText)
@@ -188,17 +227,10 @@ struct DoomSharewareView: View {
     private var controlsPanel: some View {
         VStack(alignment: .leading, spacing: 13) {
             LabSectionTitle(title: "STEROWANIE DOTYKOWE", symbol: "hand.draw")
+            Text("Lewy analog: poruszanie i kroki w bok. Prawy: obrót i strzał. Przyciski menu i drzwi poniżej.")
+                .font(.caption).foregroundStyle(LabStyle.muted)
             HStack(spacing: 8) {
-                hold("LEWO", "arrow.turn.up.left", key: 0xac)
-                hold("PRZÓD", "arrow.up", key: 0xad)
-                hold("PRAWO", "arrow.turn.up.right", key: 0xae)
-            }
-            HStack(spacing: 8) {
-                hold("TYŁ", "arrow.down", key: 0xaf)
-                hold("STRZAŁ", "scope", key: 0xa3, color: .red)
                 hold("UŻYJ", "hand.tap", key: 0xa2, color: .orange)
-            }
-            HStack(spacing: 8) {
                 hold("MENU", "line.3.horizontal", key: 27)
                 hold("ENTER", "return", key: 13)
                 hold("MAPA", "map", key: 9)
@@ -315,8 +347,26 @@ struct DoomSharewareView: View {
         }
     }
 
+    private func updateAxis(_ value: CGVector, movement: Bool) {
+        if movement { moveAxis = value } else { aimAxis = value }
+        var wanted = Set<Int32>()
+        if moveAxis.dy > 0.23 { wanted.insert(0xad) }
+        if moveAxis.dy < -0.23 { wanted.insert(0xaf) }
+        if moveAxis.dx < -0.23 { wanted.insert(0xa0) }
+        if moveAxis.dx > 0.23 { wanted.insert(0xa1) }
+        if aimAxis.dx < -0.23 { wanted.insert(0xac) }
+        if aimAxis.dx > 0.23 { wanted.insert(0xae) }
+        if hypot(aimAxis.dx, aimAxis.dy) > 0.25 { wanted.insert(0xa3) }
+        for key in analogPressed.subtracting(wanted) { doom_bridge_key(key, 0) }
+        for key in wanted.subtracting(analogPressed) { doom_bridge_key(key, 1) }
+        analogPressed = wanted
+    }
+
     private func releaseAllKeys() {
-        for key in [Int32](arrayLiteral: 0xac, 0xad, 0xae, 0xaf, 0xa3, 0xa2, 27, 13, 9) {
+        moveAxis = .zero
+        aimAxis = .zero
+        analogPressed.removeAll()
+        for key in [Int32](arrayLiteral: 0xa0, 0xa1, 0xac, 0xad, 0xae, 0xaf, 0xa3, 0xa2, 27, 13, 9) {
             doom_bridge_key(key, 0)
         }
     }
