@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 import CoreGraphics
+import AVFoundation
 
 // Uses the original Doom renderer and gameplay through the native doomgeneric C bridge.
 // The IWAD is supplied by the user (the shareware game data is not redistributed).
@@ -14,6 +15,8 @@ struct DoomSharewareView: View {
     @State private var hasWad = false
     @State private var running = false
     @State private var started = false
+    @AppStorage("doom.sfx.enabled") private var effectsEnabled = true
+    @AppStorage("doom.sfx.volume") private var effectsVolume: Double = 0.85
 
     private let width = 320
     private let height = 200
@@ -62,7 +65,7 @@ struct DoomSharewareView: View {
                             gamePanel
                             controlsPanel
                         }
-                        Text("Port bazuje na doomgeneric (GPL-2.0). Pliki shareware są osobnymi danymi gry. Ta wczesna wersja portu uruchamia silnik bez dźwięku.")
+                        Text("Port bazuje na doomgeneric (GPL-2.0). Pliki shareware są osobnymi danymi gry. Oryginalne efekty dźwiękowe odtwarzane są z WAD przez AudioToolbox. Muzyka MUS pozostaje wyłączona w tej wersji.")
                             .font(.caption2)
                             .foregroundStyle(LabStyle.muted)
                     }
@@ -100,9 +103,17 @@ struct DoomSharewareView: View {
             }
         }
         .onAppear {
+            configureSound()
+            doom_audio_set_volume(effectsEnabled ? Float(effectsVolume) : 0)
             hasWad = FileManager.default.fileExists(atPath: wadURL.path)
             doom_bridge_pause(0)
             if hasWad && !started { start() }
+        }
+        .onChange(of: effectsVolume) { _ in
+            doom_audio_set_volume(effectsEnabled ? Float(effectsVolume) : 0)
+        }
+        .onChange(of: effectsEnabled) { _ in
+            doom_audio_set_volume(effectsEnabled ? Float(effectsVolume) : 0)
         }
         .onDisappear {
             releaseAllKeys()
@@ -133,7 +144,9 @@ struct DoomSharewareView: View {
             screenshot = UIImage(cgImage: image)
             loading = false
             running = true
-            statusText = "DOOM SHAREWARE · silnik aktywny"
+            statusText = doom_audio_is_active() == 1
+                ? "DOOM SHAREWARE · obraz i oryginalne efekty dźwiękowe aktywne"
+                : "DOOM SHAREWARE · obraz aktywny; urządzenie audio niedostępne"
         }
     }
 
@@ -190,6 +203,24 @@ struct DoomSharewareView: View {
                 hold("ENTER", "return", key: 13)
                 hold("MAPA", "map", key: 9)
             }
+            Divider().overlay(LabStyle.border)
+            LabSectionTitle(title: "DŹWIĘK DOOM", symbol: "speaker.wave.3.fill")
+            Toggle("Efekty dźwiękowe", isOn: $effectsEnabled)
+                .font(.subheadline)
+                .tint(LabStyle.accent)
+            HStack {
+                Text("Głośność")
+                Spacer()
+                Text("\(Int(effectsVolume * 100))%")
+                    .monospacedDigit()
+                    .foregroundStyle(LabStyle.accent)
+            }
+            .font(.subheadline)
+            Slider(value: $effectsVolume, in: 0...1, step: 0.05)
+                .disabled(!effectsEnabled)
+            Text("Autentyczne strzały, potwory, drzwi i eksplozje z pliku WAD. Muzyka jeszcze nie jest obsługiwana.")
+                .font(.caption)
+                .foregroundStyle(LabStyle.muted)
             Divider().overlay(LabStyle.border)
             Button {
                 downloadOriginalShareware()
@@ -258,7 +289,20 @@ struct DoomSharewareView: View {
         }.resume()
     }
 
+    private func configureSound() {
+        do {
+            let audio = AVAudioSession.sharedInstance()
+            try audio.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try audio.setActive(true)
+        } catch {
+            // The engine can still render even when a device denies audio playback.
+            statusText = "Nie można aktywować wyjścia audio: \(error.localizedDescription)"
+        }
+    }
+
     private func start() {
+        configureSound()
+        doom_audio_set_volume(effectsEnabled ? Float(effectsVolume) : 0)
         guard hasWad, !started else { return }
         started = true
         loading = true
