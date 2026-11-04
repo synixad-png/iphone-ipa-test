@@ -1,0 +1,46 @@
+name: Diagnose macOS runner allocation (no app compilation)
+
+on:
+  push:
+    branches:
+      - diagnose-runner-scheduling-20261104
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-control:
+    name: Linux runner control
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check whether GitHub Actions can allocate any runner
+        run: |
+          echo "DIAG_LINUX_RUNNER_ASSIGNED"
+          uname -a
+          echo "RUNNER_NAME=$RUNNER_NAME"
+
+  macos-15-arm:
+    name: Standard macOS 15 ARM allocation
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Check macOS ARM assignment and Xcode availability
+        run: |
+          echo "DIAG_MACOS_ARM_RUNNER_ASSIGNED"
+          uname -a
+          xcodebuild -version
+          echo "RUNNER_NAME=$RUNNER_NAME"
+
+  macos-15-intel:
+    name: Standard macOS 15 Intel allocation
+    runs-on: macos-15-intel
+    timeout-minutes: 5
+    steps:
+      - name: Check macOS Intel assignment and Xcode availability
+        run: |
+          echo "DIAG_MACOS_INTEL_RUNNER_ASSIGNED"
+          uname -a
+          xcodebuild -version
+          echo "RUNNER_NAME=$RUNNER_NAME"
