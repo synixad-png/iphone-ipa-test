@@ -114,50 +114,71 @@ struct SmileQuotesView: View {
         return "\(quote.text)\n\n— \(quote.signature) 😄"
     }
 
+    // The joke and controls remain anchored; changing a quote cannot pan the page.
     var body: some View {
         GeometryReader { layout in
             let wide = layout.size.width >= 760
             ZStack {
                 LabStyle.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "face.smiling.inverse")
-                                .font(.system(size: 25, weight: .semibold))
-                                .foregroundStyle(.yellow)
-                                .frame(width: 52, height: 52)
-                                .background(.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 15))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("ŚMIESZNE TEKSTY")
-                                    .font(.system(size: wide ? 28 : 21, weight: .bold, design: .rounded))
-                                Text("Hania · Martna · Ania — rodzinna dawka humoru")
-                                    .font(.subheadline)
-                                    .foregroundStyle(LabStyle.muted)
-                            }
-                            Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 9) {
+                        Image(systemName: "face.smiling.inverse")
+                            .font(.system(size: 23, weight: .semibold))
+                            .foregroundStyle(.yellow)
+                            .frame(width: 44, height: 44)
+                            .background(.yellow.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("ŚMIESZNE TEKSTY")
+                                .font(.system(size: wide ? 25 : 19, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Text("Hania · Martna · Ania")
+                                .font(.caption)
+                                .foregroundStyle(LabStyle.muted)
                         }
-                        if wide {
-                            HStack(alignment: .top, spacing: 18) {
-                                quotePanel
-                                    .frame(maxWidth: .infinity)
-                                controlPanel
-                                    .frame(width: min(320, layout.size.width * 0.34))
-                            }
-                        } else {
-                            quotePanel
-                            controlPanel
+                        Spacer(minLength: 0)
+                        Button {
+                            onlyFavorites.toggle()
+                        } label: {
+                            Image(systemName: onlyFavorites ? "heart.fill" : "heart")
+                                .font(.title3)
+                                .foregroundStyle(onlyFavorites ? .pink : LabStyle.accent)
+                                .frame(width: 42, height: 42)
+                                .background(LabStyle.panel, in: RoundedRectangle(cornerRadius: 10))
                         }
-                        Text("48 autorskich, lekkich żartów. Działa bez internetu.")
-                            .font(.caption)
-                            .foregroundStyle(LabStyle.muted)
-                            .frame(maxWidth: .infinity)
+                        .accessibilityLabel(onlyFavorites ? "Pokaż wszystkie" : "Tylko ulubione")
                     }
-                    .padding(.horizontal, wide ? 24 : 14)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: 1150)
-                    .frame(maxWidth: .infinity)
+                    .frame(height: 47)
+
+                    HStack(spacing: 5) {
+                        ForEach(SmileHero.allCases) { hero in
+                            Button {
+                                selectedHero = hero
+                            } label: {
+                                Text(hero.rawValue)
+                                    .font(.system(size: 11, weight: .bold))
+                                    .minimumScaleFactor(0.7)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity, minHeight: 42)
+                            }
+                            .buttonStyle(LabChipStyle(active: selectedHero == hero))
+                            .accessibilityAddTraits(selectedHero == hero ? .isSelected : [])
+                        }
+                    }
+                    .frame(height: 44)
+
+                    quotePanel
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    Text("48 żartów · dostępne offline · wybranych: \(selection.count)")
+                        .font(.caption2)
+                        .foregroundStyle(LabStyle.muted)
+                        .frame(maxWidth: .infinity)
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, wide ? 24 : 12)
+                .padding(.vertical, 12)
+                .frame(maxWidth: 920, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .foregroundStyle(.white)
@@ -167,7 +188,7 @@ struct SmileQuotesView: View {
     }
 
     private var quotePanel: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("HUMOR DNIA", systemImage: "sparkles")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -183,16 +204,16 @@ struct SmileQuotesView: View {
 
             if let quote {
                 Text("„")
-                    .font(.system(size: 76, weight: .bold, design: .serif))
+                    .font(.system(size: 44, weight: .bold, design: .serif))
                     .foregroundStyle(LabStyle.accent.opacity(0.65))
-                    .frame(height: 35, alignment: .top)
+                    .frame(height: 24, alignment: .top)
 
                 Text(quote.text)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .lineSpacing(8)
                     .minimumScaleFactor(0.85)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, minHeight: 145, alignment: .center)
+                    .frame(maxWidth: .infinity, minHeight: 78, alignment: .center)
                     .multilineTextAlignment(.center)
 
                 Text("— \(quote.signature)")
