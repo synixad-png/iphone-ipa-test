@@ -41,6 +41,16 @@ enum Shading3D: String, CaseIterable, Identifiable {
     }
 }
 
+enum SurfaceFX: String, CaseIterable, Identifiable {
+    case normal = "Standard", wire = "Siatka 3D", glow = "Neon", glass = "Szkło", ceramic = "Ceramika"
+    var id: String { rawValue }
+}
+
+enum LightPreset: String, CaseIterable, Identifiable {
+    case studio = "Studio", sunset = "Zachód", ice = "Lodowy", dramatic = "Dramatyczny"
+    var id: String { rawValue }
+}
+
 enum ShaderScene {
     static let background = UIColor(red: 0.035, green: 0.055, blue: 0.1, alpha: 1)
     static let environment: UIImage = {
@@ -56,7 +66,7 @@ enum ShaderScene {
         }
     }()
 
-    static func material(_ shading: Shading3D, color: UIColor, metalness: Double, roughness: Double) -> SCNMaterial {
+    static func material(_ shading: Shading3D, color: UIColor, metalness: Double, roughness: Double, effect: SurfaceFX = .normal) -> SCNMaterial {
         let m = SCNMaterial()
         m.lightingModel = shading.lighting
         m.diffuse.contents = color
@@ -68,12 +78,29 @@ enum ShaderScene {
         // SceneKit constant includes ambient by default. Zero it to obtain true unlit.
         m.locksAmbientWithDiffuse = false
         m.ambient.contents = shading == .constant ? UIColor.black : color
+        switch effect {
+        case .normal: break
+        case .wire:
+            m.fillMode = .lines
+            m.isDoubleSided = true
+        case .glow:
+            m.emission.contents = color
+            m.emission.intensity = 1.25
+        case .glass:
+            m.transparency = 0.38
+            m.isDoubleSided = true
+            m.fresnelExponent = 2.5
+            m.roughness.contents = NSNumber(value: 0.08)
+        case .ceramic:
+            m.metalness.contents = NSNumber(value: 0.0)
+            m.roughness.contents = NSNumber(value: 0.24)
+        }
         return m
     }
 
     static func makeScene(shape: Shape3D = .sphere, shading: Shading3D = .pbr,
                           color: UIColor = .systemBlue, metalness: Double = 0.85,
-                          roughness: Double = 0.18) -> SCNScene {
+                          roughness: Double = 0.18, effect: SurfaceFX = .normal, lightPreset: LightPreset = .studio, lightPower: Double = 1.0) -> SCNScene {
         let scene = SCNScene()
         scene.background.contents = background
         scene.lightingEnvironment.contents = environment
@@ -101,19 +128,32 @@ enum ShaderScene {
         let model = SCNNode(); model.name = "model"
         model.eulerAngles = SCNVector3(-0.15, 0.35, 0)
         scene.rootNode.addChildNode(model)
-        update(scene, shape: shape, shading: shading, color: color, metalness: metalness, roughness: roughness, spinning: false)
+        update(scene, shape: shape, shading: shading, color: color, metalness: metalness, roughness: roughness, spinning: false, effect: effect, lightPreset: lightPreset, lightPower: lightPower)
         return scene
     }
 
     static func update(_ scene: SCNScene, shape: Shape3D, shading: Shading3D,
-                       color: UIColor, metalness: Double, roughness: Double, spinning: Bool) {
+                       color: UIColor, metalness: Double, roughness: Double, spinning: Bool,
+                       effect: SurfaceFX = .normal, lightPreset: LightPreset = .studio, lightPower: Double = 1.0) {
         guard let model = scene.rootNode.childNode(withName: "model", recursively: false) else { return }
         let shapeID = "shape:" + shape.rawValue
         if model.geometry?.name != shapeID {
             model.geometry = shape.geometry
             model.geometry?.name = shapeID
         }
-        model.geometry?.materials = [material(shading, color: color, metalness: metalness, roughness: roughness)]
+        model.geometry?.materials = [material(shading, color: color, metalness: metalness, roughness: roughness, effect: effect)]
+        let palette: (UIColor, UIColor)
+        switch lightPreset {
+        case .studio: palette = (.white, .cyan)
+        case .sunset: palette = (.init(red: 1, green: 0.55, blue: 0.28, alpha: 1), .init(red: 0.45, green: 0.28, blue: 1, alpha: 1))
+        case .ice: palette = (.init(red: 0.55, green: 0.85, blue: 1, alpha: 1), .init(red: 0.15, green: 0.4, blue: 1, alpha: 1))
+        case .dramatic: palette = (.white, .init(red: 1, green: 0.1, blue: 0.2, alpha: 1))
+        }
+        let power = CGFloat(max(0, min(lightPower, 2)))
+        let key = scene.rootNode.childNode(withName: "key", recursively: false)?.light
+        key?.color = palette.0; key?.intensity = 1000 * power
+        let rim = scene.rootNode.childNode(withName: "rim", recursively: false)?.light
+        rim?.color = palette.1; rim?.intensity = 650 * power
         if spinning && model.action(forKey: "spin") == nil {
             model.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 9)), forKey: "spin")
         } else if !spinning {
@@ -143,13 +183,17 @@ struct ModelView: UIViewRepresentable {
     let metalness: Double
     let roughness: Double
     let spinning: Bool
+    let effect: SurfaceFX
+    let lightPreset: LightPreset
+    let lightPower: Double
     let color: UIColor
 
     func makeUIView(context: Context) -> SCNView { ShaderScene.makeView() }
     func updateUIView(_ view: SCNView, context: Context) {
         guard let scene = view.scene else { return }
         ShaderScene.update(scene, shape: shape, shading: shading, color: color,
-                           metalness: metalness, roughness: roughness, spinning: spinning)
+                           metalness: metalness, roughness: roughness, spinning: spinning,
+                           effect: effect, lightPreset: lightPreset, lightPower: lightPower)
         view.isPlaying = spinning
         view.rendersContinuously = spinning
     }
@@ -162,6 +206,9 @@ struct ShaderLabView: View {
     @State private var roughness = 0.18
     @State private var spinning = true
     @State private var selectedColor = 0
+    @State private var effect: SurfaceFX = .normal
+    @State private var lightPreset: LightPreset = .studio
+    @State private var lightPower = 1.0
     private let swatches: [(String, UIColor, Color)] = [
         ("Tytan", UIColor(red: 0.72, green: 0.80, blue: 0.92, alpha: 1), .init(red: 0.72, green: 0.80, blue: 0.92)),
         ("Miedź", UIColor(red: 0.95, green: 0.45, blue: 0.22, alpha: 1), .orange),
@@ -181,7 +228,8 @@ struct ShaderLabView: View {
                         Spacer()
                         Image(systemName: "cube.transparent.fill").font(.title).foregroundStyle(.cyan)
                     }
-                    ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness, spinning: spinning, color: swatches[selectedColor].1)
+                    ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness, spinning: spinning, effect: effect, lightPreset: lightPreset,
+                              lightPower: lightPower, color: swatches[selectedColor].1)
                         .frame(height: 315)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                         .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.12)))
@@ -194,6 +242,17 @@ struct ShaderLabView: View {
                                     .padding(.horizontal, 12).padding(.vertical, 9)
                                     .background(shape == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
                                     .foregroundStyle(shape == item ? .black : .white)
+                            }
+                        }
+                    }
+                    Text("EFEKT POWIERZCHNI").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(SurfaceFX.allCases) { item in
+                                Button(item.rawValue) { effect = item }
+                                    .padding(.horizontal, 12).padding(.vertical, 9)
+                                    .background(effect == item ? Color.cyan : Color.white.opacity(0.11), in: Capsule())
+                                    .foregroundStyle(effect == item ? .black : .white)
                             }
                         }
                     }
@@ -221,9 +280,18 @@ struct ShaderLabView: View {
                     }
                     .font(.subheadline)
                     .disabled(shading != .pbr)
+                    Text("OŚWIETLENIE").font(.caption.bold()).tracking(1.5).foregroundStyle(.cyan)
+                    Picker("Scena światła", selection: $lightPreset) {
+                        ForEach(LightPreset.allCases) { preset in Text(preset.rawValue).tag(preset) }
+                    }.pickerStyle(.menu).tint(.white)
+                    HStack { Text("Moc lamp"); Spacer(); Text("\\(Int(lightPower * 100))%") }
+                        .font(.subheadline)
+                    Slider(value: $lightPower, in: 0...2).tint(.cyan)
+                    Text("Efekty siatki, neonu, szkła i ceramiki są oddzielne od modelu cieniowania. Neon to materiał emisyjny, bez dodatkowego bloom; szkło wykorzystuje przezroczystość, bez ray tracingu.")
+                        .font(.caption).foregroundStyle(.white.opacity(0.68))
                     Text("Metaliczność i chropowatość wpływają na PBR. Modele Phong, Blinn i Lambert wykorzystują własne równania oświetlenia; tryb stały nie reaguje na światło. PBR wykorzystuje Metal i mapę otoczenia do odbić.")
                         .font(.caption).foregroundStyle(.white.opacity(0.68))
-                    Text("SHADER LAB 3D · iOS 16+ · v1.0")
+                    Text("SHADER LAB 3D · iOS 16+ · v1.1")
                         .font(.caption2.monospaced()).foregroundStyle(.white.opacity(0.45)).frame(maxWidth: .infinity)
                 }
                 .foregroundStyle(.white)
