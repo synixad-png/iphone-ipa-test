@@ -1560,6 +1560,8 @@ struct MainTabsView: View {
             .tabItem { Label("ASTEROIDS", systemImage: "gamecontroller.fill") }
             PaintView()
                 .tabItem { Label("PAINT", systemImage: "paintbrush.pointed.fill") }
+            SmileQuotesView()
+                .tabItem { Label("HUMOR", systemImage: "face.smiling.fill") }
         }
         .tint(.cyan)
         .preferredColorScheme(.dark)
