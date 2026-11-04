@@ -1,0 +1,17 @@
+DOOM Native Engine Integration
+
+The original DOOM game engine is licensed under the GNU General Public License
+version 2 (or later where applicable). This integration uses doomgeneric,
+a derivative of the original GPL engine:
+https://github.com/ozkl/doomgeneric
+Pinned commit: e257a09527062bfb986b6e5e0780839b6cbd5b71
+
+The DoomBridge.c/H adapter and scripts/build_doom_ios.sh are provided
+under the GNU GPL version 2 or (at your option) any later version.
+Complete Doom source is fetched at the pinned commit by the build script.
+Provide corresponding source and applicable licenses to any recipients
+of a binary linked with that GPL engine.
+
+The DOOM shareware WAD is separate proprietary game data and is NOT included.
+Users import a lawfully acquired DOOM1.WAD via Files.
+No registered/commercial WADs are provided.
