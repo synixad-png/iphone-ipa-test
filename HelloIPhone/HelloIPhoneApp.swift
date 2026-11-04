@@ -722,6 +722,10 @@ struct ShaderLabView: View {
             case .success(let loaded):
                 ShaderScene.imported = loaded
                 importedName = filename
+                clipIndex = 0
+                playGLB = true
+                spinning = false
+                shape = .imported
                 importedRevision += 1
             case .failure(let error):
                 knotError = "Zapisany model GLB: \(error.localizedDescription)"
