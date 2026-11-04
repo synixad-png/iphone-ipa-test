@@ -33,66 +33,75 @@ struct DoomSharewareView: View {
             .appendingPathComponent("DOOM1.WAD")
     }
 
+    // Stationary page: the game frame never slides. Settings have their own scroll region.
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 760
             ZStack {
                 LabStyle.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "gamecontroller.fill")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundStyle(.red)
-                                .frame(width: 47, height: 47)
-                                .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("DOOM · SHAREWARE")
-                                    .font(.system(size: wide ? 27 : 20, weight: .bold, design: .rounded))
-                                Text("Oryginalny silnik z 1993 · Episode 1")
-                                    .font(.caption)
-                                    .foregroundStyle(LabStyle.muted)
-                            }
-                            Spacer(minLength: 3)
-                            Button {
-                                fullScreen = true
-                            } label: {
-                                Label("PEŁNY EKRAN", systemImage: "arrow.up.left.and.arrow.down.right")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                                    .padding(.horizontal, 10)
-                                    .frame(height: 35)
-                            }
-                            .foregroundStyle(.black)
-                            .background(LabStyle.accent, in: RoundedRectangle(cornerRadius: 8))
-                            .disabled(!running)
-                            .opacity(running ? 1 : 0.45)
-                            Text("1993")
-                                .font(.system(.caption, design: .monospaced).bold())
-                                .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 21, weight: .bold))
+                            .foregroundStyle(.red)
+                            .frame(width: 41, height: 41)
+                            .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("DOOM · SHAREWARE")
+                                .font(.system(size: wide ? 24 : 18, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            Text("DOOM 1993 · Episode 1")
+                                .font(.caption)
+                                .foregroundStyle(LabStyle.muted)
                         }
-                        if wide {
-                            HStack(alignment: .top, spacing: 16) {
-                                gamePanel
-                                    .frame(maxWidth: .infinity)
-                                controlsPanel
-                                    .frame(width: min(340, geometry.size.width * 0.35))
-                            }
-                        } else {
-                            gamePanel
-                            controlsPanel
+                        Spacer(minLength: 4)
+                        Button {
+                            fullScreen = true
+                        } label: {
+                            Label("PEŁNY EKRAN", systemImage: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .padding(.horizontal, 10)
+                                .frame(height: 36)
                         }
-                        Text("Port bazuje na doomgeneric (GPL-2.0). Pliki shareware są osobnymi danymi gry. Oryginalne efekty dźwiękowe odtwarzane są z WAD przez AudioToolbox. Muzyka MUS pozostaje wyłączona w tej wersji.")
-                            .font(.caption2)
-                            .foregroundStyle(LabStyle.muted)
+                        .foregroundStyle(.black)
+                        .background(LabStyle.accent, in: RoundedRectangle(cornerRadius: 8))
+                        .disabled(!running)
+                        .opacity(running ? 1 : 0.5)
                     }
-                    .padding(.horizontal, wide ? 22 : 12)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: 1250)
-                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+
+                    if wide {
+                        HStack(alignment: .top, spacing: 14) {
+                            gamePanel
+                                .frame(maxWidth: .infinity, alignment: .top)
+                            ScrollView(.vertical) {
+                                controlsPanel
+                                    .padding(.bottom, 12)
+                            }
+                            .scrollIndicators(.hidden)
+                            .frame(width: min(340, geometry.size.width * 0.37),
+                                   height: max(1, geometry.size.height - 75))
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    } else {
+                        gamePanel
+                            .frame(maxWidth: .infinity, alignment: .top)
+                        ScrollView(.vertical) {
+                            controlsPanel
+                                .padding(.bottom, 18)
+                        }
+                        .scrollIndicators(.hidden)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, wide ? 20 : 10)
+                .padding(.top, 10)
+                .padding(.bottom, 5)
+                .frame(maxWidth: 1250, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .foregroundStyle(.white)
