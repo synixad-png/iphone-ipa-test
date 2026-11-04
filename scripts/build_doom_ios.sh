@@ -4,11 +4,19 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE_COMMIT=e257a09527062bfb986b6e5e0780839b6cbd5b71
 ENGINE="$ROOT/DoomSource"
-if [[ ! -f "$ENGINE/doomgeneric/doomgeneric.c" ]]; then
+if [[ -d "$ENGINE/.git" ]]; then
+  git -C "$ENGINE" fetch --quiet --depth 1 origin "$SOURCE_COMMIT"
+  git -C "$ENGINE" checkout --quiet --detach "$SOURCE_COMMIT"
+  git -C "$ENGINE" rev-parse HEAD > "$ENGINE/COMMIT_PINNED.txt"
+elif [[ -f "$ENGINE/doomgeneric/doomgeneric.c" ]]; then
+  test -f "$ENGINE/COMMIT_PINNED.txt"
+  test "$(cat "$ENGINE/COMMIT_PINNED.txt")" = "$SOURCE_COMMIT"
+else
   git clone --quiet https://github.com/ozkl/doomgeneric.git "$ENGINE"
+  git -C "$ENGINE" fetch --quiet --depth 1 origin "$SOURCE_COMMIT"
+  git -C "$ENGINE" checkout --quiet --detach "$SOURCE_COMMIT"
+  git -C "$ENGINE" rev-parse HEAD > "$ENGINE/COMMIT_PINNED.txt"
 fi
-git -C "$ENGINE" fetch --quiet --depth 1 origin "$SOURCE_COMMIT"
-git -C "$ENGINE" checkout --quiet --detach "$SOURCE_COMMIT"
 SDK="${1:-iphoneos}"
 BUILD="$ROOT/BuildGenerated"
 SRC="$ENGINE/doomgeneric"
