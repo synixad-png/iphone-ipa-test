@@ -109,8 +109,8 @@ jobs:
           git archive --format=zip --output=dist/SHADER_LAB_3D_v1_ZRODLA.zip HEAD
           # Distribute corresponding GPL engine sources together with the adapter.
           test -f DoomSource/doomgeneric/doomgeneric.c
-          zip -qry dist/SHADER_LAB_3D_v1_ZRODLA.zip DoomSource/doomgeneric -x '*.o'
-          zip -q dist/SHADER_LAB_3D_v1_ZRODLA.zip LICENSE_DOOM_ENGINE.txt
+          zip -qry dist/SHADER_LAB_3D_v1_ZRODLA.zip DoomSource/doomgeneric
+          zip -q dist/SHADER_LAB_3D_v1_ZRODLA.zip DoomSource/LICENSE DoomSource/README.md DoomSource/COMMIT_PINNED.txt LICENSE_DOOM_ENGINE.txt
           (cd dist && zip -qry SHADER_LAB_3D_v1_TESTY.zip RenderEvidence App-Simulator.png iPad-smoke.txt test-summary.json simulator-tests.log device-build.log doom-engine-device.log doom-engine-simulator.log build-environment.txt verification.json SHA256SUMS.txt)
           if [[ -f dist/App-iPad-Simulator.png ]]; then (cd dist && zip -q SHADER_LAB_3D_v1_TESTY.zip App-iPad-Simulator.png); fi
       - name: Upload GitHub Actions artifact
