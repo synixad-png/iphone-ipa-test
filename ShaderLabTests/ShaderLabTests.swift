@@ -34,9 +34,9 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(renderer.renderingAPI, .metal)
         renderer.scene = scene
         renderer.pointOfView = scene.rootNode.childNode(withName: "camera", recursively: false)
-        XCTAssertTrue(renderer.prepare([scene], shouldAbortBlock: nil))
+        XCTAssertTrue(renderer.prepare(scene, shouldAbortBlock: nil))
         let image = renderer.snapshot(atTime: 0, with: CGSize(width: 192, height: 192), antialiasingMode: .multisampling4X)
-        try XCTUnwrap(image.pngData()).write(to: folder.appendingPathComponent(name + ".png"))
+        try XCTUnwrap(image.pngData()).write(to: folder.appendingPathComponent(name.replacingOccurrences(of: "/", with: "_") + ".png"))
         let attachment = XCTAttachment(image: image); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
         return try pixels(image)
     }
