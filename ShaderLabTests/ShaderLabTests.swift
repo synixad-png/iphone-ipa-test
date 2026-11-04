@@ -71,11 +71,13 @@ final class ShaderLabTests: XCTestCase {
             try? FileManager.default.removeItem(at: zip)
             try? FileManager.default.removeItem(at: wad)
         }
-        XCTAssertEqual(zip.path.withCString { zipPath in
+        let unpacked = zip.path.withCString { zipPath in
             wad.path.withCString { wadPath in
                 doom_bridge_extract_shareware_zip(zipPath, wadPath)
             }
-        }, 0, "Shareware ZIP must yield valid original WAD")
+        }
+        XCTAssertEqual(unpacked, 0, "Shareware ZIP must yield valid original WAD")
+        guard unpacked == 0 else { return }
         XCTAssertEqual(wad.path.withCString { doom_bridge_start($0) }, 1)
         var frame = [UInt32](repeating: 0, count: 320 * 200)
         var displayed = false
