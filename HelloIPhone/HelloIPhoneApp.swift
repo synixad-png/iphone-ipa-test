@@ -211,7 +211,7 @@ enum ShaderScene {
         guard let model = scene.rootNode.childNode(withName: "model", recursively: false) else { return }
         if shape == .imported {
             if let imported, (model.userData?["gltfRevision"] as? String) != imported.filename {
-                model.removeAllAnimationPlayers()
+                model.removeAllAnimations()
                 model.removeAction(forKey: "spin")
                 for child in model.childNodes { child.removeFromParentNode() }
                 model.geometry = nil
@@ -222,7 +222,7 @@ enum ShaderScene {
             // Preserve imported glTF material textures. Controls for built-in shapes must not overwrite them.
         } else {
             if model.userData?["gltfRevision"] != nil {
-                model.removeAllAnimationPlayers()
+                model.removeAllAnimations()
                 for child in model.childNodes { child.removeFromParentNode() }
                 model.name = "model"
             }
@@ -301,7 +301,7 @@ struct ModelView: UIViewRepresentable {
             let model = scene.rootNode.childNode(withName: "model", recursively: false)
             let key = "gltf-clip"
             if (model?.userData?["activeClip"] as? Int) != clipIndex && imported.animations.indices.contains(clipIndex) {
-                model?.removeAnimationPlayer(forKey: key)
+                model?.removeAnimation(forKey: key)
                 model?.addAnimationPlayer(imported.animations[clipIndex].animationPlayer, forKey: key)
                 if model?.userData == nil { model?.userData = NSMutableDictionary() }
                 model?.userData?["activeClip"] = clipIndex
