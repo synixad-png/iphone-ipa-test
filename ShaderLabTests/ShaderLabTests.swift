@@ -48,6 +48,13 @@ final class ShaderLabTests: XCTestCase {
 
 
 
+    func testDoomNativeSFXMixerAndPanning() {
+        // Original Doom 8-bit PCM through the real AudioToolbox mixing backend.
+        XCTAssertEqual(doom_audio_selftest(), 1, "Left/right panning and signed PCM mixing must be correct")
+        doom_audio_set_volume(0)
+        doom_audio_set_volume(0.85)
+    }
+
     func testZZDoomSharewareNativeFirstFrame() async throws {
         // Obtain the historical shareware ZIP only inside the simulator test, not in the IPA.
         let remote = try XCTUnwrap(URL(string: "https://www.jbserver.com/downloads/games/doom/misc/shareware/doom1.wad.zip"))
@@ -93,6 +100,10 @@ final class ShaderLabTests: XCTestCase {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         XCTAssertTrue(displayed, "Native Doom must render a nonblank first frame from shareware data")
+        XCTAssertEqual(doom_audio_is_active(), 1,
+                       "Native Doom SFX backend must initialize on iOS simulator")
+        XCTAssertGreaterThan(doom_audio_callback_count(), 0,
+                             "AudioQueue must continuously request audio buffers")
         doom_bridge_pause(1)
     }
 
