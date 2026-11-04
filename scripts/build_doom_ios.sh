@@ -25,10 +25,17 @@ SDKROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
 for object in $OBJECTS; do
   if [[ "$object" == "doomgeneric_xlib.o" ]]; then continue; fi
   name="${object%.o}"
+  INPUT="$SRC/$name.c"
+  if [[ "$name" == "i_system" ]]; then
+    # iOS forbids libc system(); Doom uses it only for legacy external shell helpers.
+    INPUT="$BUILD/i_system_ios.c"
+    printf 'static int doom_ios_system(const char *cmd) { (void)cmd; return -1; }\n' > "$INPUT"
+    sed 's/system(/doom_ios_system(/g' "$SRC/i_system.c" >> "$INPUT"
+  fi
   xcrun --sdk "$SDK" clang -target "$TARGET" -isysroot "$SDKROOT" \
     -std=gnu11 -O2 -fcommon -w -DNORMALUNIX -D_DEFAULT_SOURCE \
     -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 \
-    -I"$SRC" -c "$SRC/$name.c" -o "$BUILD/objects/$name.o"
+    -I"$SRC" -c "$INPUT" -o "$BUILD/objects/$name.o"
 done
 xcrun --sdk "$SDK" clang -target "$TARGET" -isysroot "$SDKROOT" \
   -std=gnu11 -O2 -fcommon -w -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 \
