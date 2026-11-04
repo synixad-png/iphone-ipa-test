@@ -4,17 +4,22 @@
  classes = {};
  objectVersion = 56;
  objects = {
+  C10000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GLBSceneLoader.swift; sourceTree = "<group>"; };
+  C10000000000000000000004 = {isa = PBXBuildFile; fileRef = C10000000000000000000003; };
+  C10000000000000000000001 = {isa = XCRemoteSwiftPackageReference; repositoryURL = "https://github.com/warrenm/GLTFKit2.git"; requirement = { kind = exactVersion; version = 0.5.15; }; };
+  C10000000000000000000002 = {isa = XCSwiftPackageProductDependency; package = C10000000000000000000001; productName = GLTFKit2; };
+  C10000000000000000000005 = {isa = PBXBuildFile; productRef = C10000000000000000000002; };
   A10000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelloIPhoneApp.swift; sourceTree = "<group>"; };
   A10000000000000000000002 = {isa = PBXBuildFile; fileRef = A10000000000000000000001; };
   A10000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HelloIPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
   A10000000000000000000004 = {isa = PBXGroup; children = (A10000000000000000000005, A10000000000000000000006, B10000000000000000000005,); sourceTree = "<group>"; };
-  A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000001,); path = HelloIPhone; sourceTree = "<group>"; };
+  A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000001,C10000000000000000000003,); path = HelloIPhone; sourceTree = "<group>"; };
   A10000000000000000000006 = {isa = PBXGroup; children = (A10000000000000000000003,B10000000000000000000003,); name = Products; sourceTree = "<group>"; };
-  A10000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002,); runOnlyForDeploymentPostprocessing = 0; };
-  A10000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  A10000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002,C10000000000000000000004,); runOnlyForDeploymentPostprocessing = 0; };
+  A10000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000005,); runOnlyForDeploymentPostprocessing = 0; };
   A10000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-  A1000000000000000000000A = {isa = PBXNativeTarget; buildConfigurationList = A1000000000000000000000D; buildPhases = (A10000000000000000000007,A10000000000000000000008,A10000000000000000000009,); buildRules = (); dependencies = (); name = HelloIPhone; productName = HelloIPhone; productReference = A10000000000000000000003; productType = "com.apple.product-type.application"; };
-  A1000000000000000000000B = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; TargetAttributes = {A1000000000000000000000A = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = A1000000000000000000000C; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = A10000000000000000000004; productRefGroup = A10000000000000000000006; projectDirPath = ""; projectRoot = ""; targets = (A1000000000000000000000A,B1000000000000000000000A,); };
+  A1000000000000000000000A = {isa = PBXNativeTarget; buildConfigurationList = A1000000000000000000000D; buildPhases = (A10000000000000000000007,A10000000000000000000008,A10000000000000000000009,); buildRules = (); dependencies = (); name = HelloIPhone; productName = HelloIPhone; productReference = A10000000000000000000003; packageProductDependencies = (C10000000000000000000002,); productType = "com.apple.product-type.application"; };
+  A1000000000000000000000B = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; TargetAttributes = {A1000000000000000000000A = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = A1000000000000000000000C; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = A10000000000000000000004; productRefGroup = A10000000000000000000006; projectDirPath = ""; packageReferences = (C10000000000000000000001,); projectRoot = ""; targets = (A1000000000000000000000A,B1000000000000000000000A,); };
   A1000000000000000000000C = {isa = XCConfigurationList; buildConfigurations = (A1000000000000000000000E,A1000000000000000000000F,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
   A1000000000000000000000D = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000010,A10000000000000000000011,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
   A1000000000000000000000E = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
