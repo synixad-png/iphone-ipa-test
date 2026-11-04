@@ -38,7 +38,7 @@ with zipfile.ZipFile(path) as z:
             path_offset = struct.unpack_from("<I", data, offset + 8)[0]
             assert 12 <= path_offset < size
             string_start = offset + path_offset
-            raw = data[string_start:offset + size].split(b"\\0", 1)[0]
+            raw = data[string_start:offset + size].split(bytes([0]), 1)[0]
             rpaths.append(raw.decode("utf-8"))
         offset += size
     embedded = root + "Frameworks/GLTFKit2.framework/GLTFKit2"
