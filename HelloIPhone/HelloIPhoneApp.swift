@@ -399,6 +399,7 @@ struct LabValueSlider: View {
 }
 
 struct ShaderLabView: View {
+    @State private var activePanel = 0 // 0 models, 1 materials, 2 lighting
     @State private var shape: Shape3D = .sphere
     @State private var shading: Shading3D = .pbr
     @State private var metalness = 0.85
@@ -427,59 +428,65 @@ struct ShaderLabView: View {
         ("Szmaragd", UIColor(red: 0.08, green: 0.85, blue: 0.58, alpha: 1), .green),
         ("Fiolet", UIColor(red: 0.58, green: 0.35, blue: 0.95, alpha: 1), .purple)
     ]
+    // Entire page is fixed in place. Only the dedicated settings pane may scroll.
     var body: some View {
         GeometryReader { layout in
             let wide = layout.size.width >= 780
+            let previewHeight = min(wide ? layout.size.height * 0.72 : layout.size.height * 0.34,
+                                    wide ? 520 : 280)
             ZStack {
                 LabStyle.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        HStack(alignment: .center, spacing: 12) {
-                            Image(systemName: "cube.transparent.fill")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(LabStyle.accent)
-                                .frame(width: 48, height: 48)
-                                .background(LabStyle.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 14))
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("SHADER LAB")
-                                    .font(.system(size: wide ? 28 : 22, weight: .bold, design: .rounded))
-                                Text("Studio materiałów i modeli 3D")
-                                    .font(.subheadline)
-                                    .foregroundStyle(LabStyle.muted)
-                            }
-                            Spacer(minLength: 0)
-                            Text("3D / METAL")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(LabStyle.accent)
-                                .padding(.horizontal, 10).padding(.vertical, 7)
-                                .background(LabStyle.accent.opacity(0.1), in: Capsule())
+                VStack(alignment: .leading, spacing: 11) {
+                    HStack(spacing: 9) {
+                        Image(systemName: "cube.transparent.fill")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(LabStyle.accent)
+                            .frame(width: 42, height: 42)
+                            .background(LabStyle.accent.opacity(0.13),
+                                        in: RoundedRectangle(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SHADER LAB")
+                                .font(.system(size: wide ? 24 : 19, weight: .bold, design: .rounded))
+                            Text("Studio modeli i materiałów 3D")
+                                .font(.caption)
+                                .foregroundStyle(LabStyle.muted)
                         }
-                        if wide {
-                            HStack(alignment: .top, spacing: 18) {
-                                previewPanel(wide: true)
-                                    .frame(maxWidth: .infinity)
-                                settingsPanel(wide: true)
-                                    .frame(maxWidth: .infinity)
-                            }
-                        } else {
-                            previewPanel(wide: false)
-                            settingsPanel(wide: false)
-                        }
-                        HStack {
-                            Image(systemName: "checkmark.shield")
-                            Text("Renderowanie natywne · SceneKit / Metal · iOS 16+")
-                        }
-                        .font(.caption2)
-                        .foregroundStyle(LabStyle.muted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, wide ? 24 : 14)
-                    .padding(.vertical, 16)
-                    .frame(maxWidth: 1180)
-                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+
+                    if wide {
+                        HStack(alignment: .top, spacing: 14) {
+                            previewPanel(wide: true, height: previewHeight)
+                                .frame(maxWidth: .infinity, alignment: .top)
+                            VStack(spacing: 8) {
+                                settingsSwitcher
+                                ScrollView(.vertical) {
+                                    settingsPanel(wide: true)
+                                        .padding(.bottom, 10)
+                                }
+                                .scrollIndicators(.hidden)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    } else {
+                        previewPanel(wide: false, height: previewHeight)
+                        settingsSwitcher
+                        ScrollView(.vertical) {
+                            settingsPanel(wide: false)
+                                .padding(.bottom, 12)
+                        }
+                        .scrollIndicators(.hidden)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, wide ? 22 : 12)
+                .padding(.top, 11)
+                .padding(.bottom, 6)
+                .frame(maxWidth: 1200, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
         .foregroundStyle(.white)
@@ -538,7 +545,24 @@ struct ShaderLabView: View {
     }
 
 
-    @ViewBuilder private func previewPanel(wide: Bool) -> some View {
+    private var settingsSwitcher: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { index in
+                let labels = ["MODELE", "MATERIAŁY", "ŚWIATŁO"]
+                Button(labels[index]) { activePanel = index }
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, minHeight: 38)
+                    .buttonStyle(LabChipStyle(active: activePanel == index))
+                    .accessibilityAddTraits(activePanel == index ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(LabStyle.panel, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder private func previewPanel(wide: Bool, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 LabSectionTitle(title: "PODGLĄD", symbol: "viewfinder")
@@ -553,7 +577,7 @@ struct ShaderLabView: View {
                       lightPower: lightPower, color: swatches[selectedColor].1,
                       knotRevision: knotRevision, importedRevision: importedRevision,
                       clipIndex: clipIndex, playGLB: playGLB)
-                .frame(height: wide ? 430 : 300)
+                .frame(height: height)
                 .background(LabStyle.background, in: RoundedRectangle(cornerRadius: 16))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LabStyle.border, lineWidth: 1))
@@ -574,6 +598,7 @@ struct ShaderLabView: View {
 
     @ViewBuilder private func settingsPanel(wide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            if activePanel == 0 {
             VStack(alignment: .leading, spacing: 12) {
                 LabSectionTitle(title: "MODELE 3D", symbol: "square.stack.3d.up")
                 Text("Wybierz gotową bryłę albo wczytaj własny model GLB z teksturami i animacjami.")
@@ -641,6 +666,8 @@ struct ShaderLabView: View {
             }
             .labPanel()
 
+            }
+            if activePanel == 1 {
             VStack(alignment: .leading, spacing: 12) {
                 LabSectionTitle(title: "WYGLĄD POWIERZCHNI", symbol: "circle.hexagongrid")
                 if shape == .imported {
@@ -695,6 +722,8 @@ struct ShaderLabView: View {
             }
             .labPanel()
 
+            }
+            if activePanel == 2 {
             VStack(alignment: .leading, spacing: 12) {
                 LabSectionTitle(title: "OŚWIETLENIE", symbol: "sun.max")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: wide ? 125 : 110), spacing: 8)], spacing: 8) {
@@ -711,6 +740,7 @@ struct ShaderLabView: View {
                     .foregroundStyle(LabStyle.muted)
             }
             .labPanel()
+            }
         }
     }
 
