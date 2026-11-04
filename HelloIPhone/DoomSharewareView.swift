@@ -102,8 +102,10 @@ struct DoomSharewareView: View {
                               move: { axis in updateAxis(axis, movement: true) },
                               aim: { axis in updateAxis(axis, movement: false) },
                               interact: { pressed in doom_bridge_key(0xa2, pressed ? 1 : 0) },
+                              fire: { pressed in doom_bridge_key(0xa3, pressed ? 1 : 0) },
                               menu: { pressed in doom_bridge_key(27, pressed ? 1 : 0) },
                               close: { fullScreen = false })
+                .onAppear { doom_bridge_pause(0) }
         }
         .fileImporter(isPresented: $importPresented,
                       allowedContentTypes: [UTType(filenameExtension: "wad") ?? .data, .data]) { result in
@@ -207,7 +209,11 @@ struct DoomSharewareView: View {
                         updateAxis($0, movement: true)
                     }
                     Spacer(minLength: 12)
-                    GameJoystick(title: "OBRÓT · OGIEŃ", tint: .red, diameter: 96) {
+                    DoomPressControl(title: "OGIEŃ", symbol: "scope") { pressed in
+                        doom_bridge_key(0xa3, pressed ? 1 : 0)
+                    }
+                    .padding(.bottom, 7)
+                    GameJoystick(title: "OBRÓT", tint: .red, diameter: 96) {
                         updateAxis($0, movement: false)
                     }
                 }
@@ -227,7 +233,7 @@ struct DoomSharewareView: View {
     private var controlsPanel: some View {
         VStack(alignment: .leading, spacing: 13) {
             LabSectionTitle(title: "STEROWANIE DOTYKOWE", symbol: "hand.draw")
-            Text("Lewy analog: poruszanie i kroki w bok. Prawy: obrót i strzał. Przyciski menu i drzwi poniżej.")
+            Text("Lewy analog: poruszanie i kroki w bok. Prawy: obrót. Przycisk OGIEŃ jest bezpośrednio na obrazie gry.")
                 .font(.caption).foregroundStyle(LabStyle.muted)
             HStack(spacing: 8) {
                 hold("UŻYJ", "hand.tap", key: 0xa2, color: .orange)
@@ -356,7 +362,6 @@ struct DoomSharewareView: View {
         if moveAxis.dx > 0.23 { wanted.insert(0xa1) }
         if aimAxis.dx < -0.23 { wanted.insert(0xac) }
         if aimAxis.dx > 0.23 { wanted.insert(0xae) }
-        if hypot(aimAxis.dx, aimAxis.dy) > 0.25 { wanted.insert(0xa3) }
         for key in analogPressed.subtracting(wanted) { doom_bridge_key(key, 0) }
         for key in wanted.subtracting(analogPressed) { doom_bridge_key(key, 1) }
         analogPressed = wanted
