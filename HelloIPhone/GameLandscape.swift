@@ -111,6 +111,7 @@ struct DoomLandscapeView: View {
     let move: (CGVector) -> Void
     let aim: (CGVector) -> Void
     let interact: (Bool) -> Void
+    let fire: (Bool) -> Void
     let menu: (Bool) -> Void
     let close: () -> Void
 
@@ -139,9 +140,12 @@ struct DoomLandscapeView: View {
                     HStack(alignment: .bottom) {
                         GameJoystick(title: "RUCH", tint: .cyan, diameter: d, onVector: move)
                         Spacer()
-                        DoomPressControl(title: "UŻYJ", symbol: "hand.tap", action: interact)
-                            .padding(.bottom, 12)
-                        GameJoystick(title: "OBRÓT · OGIEŃ", tint: .red, diameter: d, onVector: aim)
+                        VStack(spacing: 8) {
+                            DoomPressControl(title: "OGIEŃ", symbol: "scope", action: fire)
+                            DoomPressControl(title: "UŻYJ", symbol: "hand.tap", action: interact)
+                        }
+                        .padding(.bottom, 12)
+                        GameJoystick(title: "OBRÓT", tint: .red, diameter: d, onVector: aim)
                     }
                 }
                 .padding(.horizontal, max(16, g.safeAreaInsets.leading + 10))
@@ -153,7 +157,7 @@ struct DoomLandscapeView: View {
         .persistentSystemOverlays(.hidden)
         .onAppear { GameLandscapeMode.set(true) }
         .onDisappear {
-            move(.zero); aim(.zero); interact(false); menu(false)
+            move(.zero); aim(.zero); fire(false); interact(false); menu(false)
             GameLandscapeMode.set(false)
         }
     }
