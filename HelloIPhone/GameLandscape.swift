@@ -1,6 +1,29 @@
 import SwiftUI
 import UIKit
 import SpriteKit
+import GameController
+
+// Apple GameController supports DualShock 4 (DualShock profile) and compatible
+// extended controllers. Read on the main game/UI update thread, so touch input
+// remains available and a disconnected controller never leaves keys held down.
+enum PS4Controller {
+    static func discover() {
+        GCController.startWirelessControllerDiscovery(completionHandler: nil)
+    }
+
+    static var pad: GCExtendedGamepad? {
+        GCController.controllers().first(where: { $0.extendedGamepad != nil })?.extendedGamepad
+    }
+
+    static func stick(_ stick: GCControllerDirectionPad, deadZone: CGFloat = 0.18) -> CGVector {
+        let x = CGFloat(stick.xAxis.value)
+        let y = CGFloat(stick.yAxis.value)
+        let magnitude = hypot(x, y)
+        guard magnitude > deadZone else { return .zero }
+        let adjusted = min(1, (magnitude - deadZone) / (1 - deadZone))
+        return CGVector(dx: x / magnitude * adjusted, dy: y / magnitude * adjusted)
+    }
+}
 
 // Full-screen presentations use native iOS 16 scene geometry updates.
 // iPadOS may deny orientation changes when another multitasking window is active.
