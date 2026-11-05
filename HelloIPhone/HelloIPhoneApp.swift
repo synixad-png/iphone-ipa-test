@@ -302,17 +302,28 @@ struct ModelView: UIViewRepresentable {
                            metalness: metalness, roughness: roughness, spinning: spinning,
                            effect: effect, lightPreset: lightPreset, lightPower: lightPower)
         if shape == .imported, let imported = ShaderScene.imported {
-            let model = scene.rootNode.childNode(withName: "model", recursively: false)
+            // GLTFKit2 encodes animation key paths relative to the original glTF root.
+            // Attaching players to the preview wrapper/model silently breaks those paths.
+            let target = imported.animationTarget
             let key = "gltf-clip"
-            if (context.coordinator.selectedClip != clipIndex || context.coordinator.assetRevision != importedRevision) && imported.animations.indices.contains(clipIndex) {
-                model?.removeAnimation(forKey: key)
-                model?.addAnimationPlayer(imported.animations[clipIndex].animationPlayer, forKey: key)
+            if context.coordinator.selectedClip != clipIndex || context.coordinator.assetRevision != importedRevision {
+                target.removeAnimation(forKey: key)
+                if imported.animations.indices.contains(clipIndex) {
+                    let player = imported.animations[clipIndex].animationPlayer
+                    player.animation.usesSceneTimeBase = false
+                    player.animation.repeatCount = .greatestFiniteMagnitude
+                    target.addAnimationPlayer(player, forKey: key)
+                    player.play()
+                }
                 context.coordinator.selectedClip = clipIndex
                 context.coordinator.assetRevision = importedRevision
             }
-            model?.animationPlayer(forKey: key)?.paused = !playGLB
+            target.animationPlayer(forKey: key)?.paused = !playGLB
         }
-        if shape != .imported { context.coordinator.selectedClip = -1 }
+        if shape != .imported {
+            context.coordinator.selectedClip = -1
+            context.coordinator.assetRevision = -1
+        }
         view.isPlaying = spinning || (shape == .imported && playGLB)
         view.rendersContinuously = spinning || (shape == .imported && playGLB)
     }
