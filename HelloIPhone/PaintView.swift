@@ -234,6 +234,7 @@ struct PaintShareSheet: UIViewControllerRepresentable {
 // Workspace layout: the canvas fills the screen while tools stay on the right.
 // No ScrollView or drag gesture is placed above the drawing surface.
 struct PaintView: View {
+    var onExit: () -> Void = {}
     @StateObject private var document = PaintDocument()
     @State private var showClearConfirmation = false
     @State private var exportImage: UIImage?
@@ -294,6 +295,7 @@ struct PaintView: View {
             .background(LabStyle.background)
         }
         .toolbar(.hidden, for: .tabBar)
+        .statusBarHidden(true)
         .foregroundStyle(.white)
         .tint(LabStyle.accent)
         .sheet(isPresented: $showShare) {
@@ -309,6 +311,16 @@ struct PaintView: View {
     @ViewBuilder
     private func toolSidebar(compact: Bool) -> some View {
         VStack(alignment: .center, spacing: compact ? 12 : 16) {
+            Button(action: onExit) {
+                Label(compact ? "WYJDŹ" : "Wróć do aplikacji", systemImage: "arrow.left")
+                    .font(.system(size: compact ? 10 : 12, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .frame(maxWidth: .infinity, minHeight: 38)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Zamknij pełnoekranowy Paint i pokaż zakładki aplikacji")
+
             Text("NARZĘDZIA")
                 .font(.system(size: compact ? 9 : 12, weight: .bold))
                 .foregroundStyle(LabStyle.accent)
