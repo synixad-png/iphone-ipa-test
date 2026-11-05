@@ -161,7 +161,8 @@ struct DoomSharewareView: View {
                               touchMode: $touchMode,
                               lookSensitivity: $lookSensitivity,
                               fireHorizontal: $fireHorizontal,
-                              fireVertical: $fireVertical)
+                              fireVertical: $fireVertical,
+                              displayResolution: $displayResolution)
                 .onAppear { doom_bridge_pause(0) }
         }
         .fileImporter(isPresented: $importPresented,
