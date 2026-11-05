@@ -4,6 +4,41 @@ import UniformTypeIdentifiers
 import CoreGraphics
 import AVFoundation
 
+// DOOMGeneric's engine renders internally at a fixed 320 × 200 pixels.
+// These presets change the display framebuffer sampling, not engine detail.
+enum DoomDisplayResolution: Int, CaseIterable, Identifiable {
+    case minimum = 0, low, original, high, maximum
+    var id: Int { rawValue }
+    var width: Int {
+        switch self {
+        case .minimum: return 160
+        case .low: return 240
+        case .original: return 320
+        case .high: return 640
+        case .maximum: return 1280
+        }
+    }
+    var height: Int { width * 5 / 8 }
+    var title: String { "\(width) × \(height)" }
+
+    static func convert(_ frame: CGImage, to preset: DoomDisplayResolution) -> UIImage {
+        if preset == .original { return UIImage(cgImage: frame) }
+        let size = CGSize(width: preset.width, height: preset.height)
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = true
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { context in
+            let cg = context.cgContext
+            // Preserve original pixel-art edge structure (no invented detail).
+            cg.interpolationQuality = .none
+            cg.translateBy(x: 0, y: size.height)
+            cg.scaleBy(x: 1, y: -1)
+            cg.draw(frame, in: CGRect(origin: .zero, size: size))
+        }
+    }
+}
+
 // Uses the original Doom renderer and gameplay through the native doomgeneric C bridge.
 // The IWAD is supplied by the user (the shareware game data is not redistributed).
 struct DoomSharewareView: View {
@@ -22,6 +57,7 @@ struct DoomSharewareView: View {
     @State private var controllerPressed = Set<Int32>()
     @State private var controllerConnected = false
     @State private var controllerActive = false
+    @AppStorage("doom.display.resolution") private var displayResolution = DoomDisplayResolution.original.rawValue
     @AppStorage("doom.touch.mode") private var touchMode = "analog"
     @AppStorage("doom.touch.lookSensitivity") private var lookSensitivity: Double = 1.4
     @AppStorage("doom.touch.fireHorizontal") private var fireHorizontal: Double = 0.78
@@ -195,7 +231,8 @@ struct DoomSharewareView: View {
                                           CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue)),
                                       provider: provider, decode: nil,
                                       shouldInterpolate: false, intent: .defaultIntent) else { return }
-            screenshot = UIImage(cgImage: image)
+            let resolution = DoomDisplayResolution(rawValue: displayResolution) ?? .original
+            screenshot = DoomDisplayResolution.convert(image, to: resolution)
             loading = false
             running = true
             statusText = doom_audio_is_active() == 1
@@ -278,6 +315,18 @@ struct DoomSharewareView: View {
 
     private var controlsPanel: some View {
         VStack(alignment: .leading, spacing: 13) {
+            LabSectionTitle(title: "OBRAZ DOOM", symbol: "display")
+            Picker("Rozdzielczość obrazu", selection: $displayResolution) {
+                ForEach(DoomDisplayResolution.allCases) { preset in
+                    Text(preset.title).tag(preset.rawValue)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityLabel("Rozdzielczość wyświetlanego obrazu DOOM")
+            Text("Od 160 × 100 do 1280 × 800. Klasyczny silnik DOOM renderuje scenę w 320 × 200; ustawienie zmienia próbkowanie i skalowanie obrazu, a nie szczegółowość geometrii. Możesz przełączać podczas gry.")
+                .font(.caption)
+                .foregroundStyle(LabStyle.muted)
+            Divider().overlay(LabStyle.border)
             LabSectionTitle(title: "STEROWANIE DOTYKOWE", symbol: "hand.draw")
             HStack(spacing: 6) {
                 Image(systemName: "gamecontroller.fill")
