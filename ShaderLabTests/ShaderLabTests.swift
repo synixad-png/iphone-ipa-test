@@ -323,6 +323,41 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(scene.lives,3)
     }
 
+    func testBundledShipModelInLibraryAndSceneKitPreview() throws {
+        XCTAssertTrue(Shape3D.allCases.contains(.ship))
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "Statek_Bez_Animacji_v57_EDYCJA_v601", withExtension: "glb"),
+                                "Ship must be included in the application resources")
+        let ready = expectation(description: "Bundled ship parsed")
+        GLBSceneLoader.load(from: url) { result in
+            switch result {
+            case .success(let loaded):
+                XCTAssertGreaterThan(loaded.meshCount, 0, "Ship must contain actual drawable meshes")
+                ShaderScene.ship = loaded
+                defer { ShaderScene.ship = nil }
+                let shipScene = ShaderScene.makeScene(shape: .ship)
+                let model = shipScene.rootNode.childNode(withName: "model", recursively: false)
+                XCTAssertTrue(model?.childNodes.first === loaded.root)
+                XCTAssertNil(model?.geometry, "Ship must not be replaced by a SceneKit primitive")
+                if MTLCreateSystemDefaultDevice() != nil {
+                    let plain = ShaderScene.makeScene(shape: .sphere)
+                    plain.rootNode.childNode(withName: "model", recursively: false)?.geometry = nil
+                    do {
+                        let visible = try self.render(shipScene, name: "bundled-ship-visible")
+                        let empty = try self.render(plain, name: "bundled-ship-empty-control")
+                        XCTAssertGreaterThan(self.difference(visible, empty), 0.002,
+                            "The included ship parsed but was not rendered by SceneKit")
+                    } catch {
+                        XCTFail("Ship preview rendering failed: \(error)")
+                    }
+                }
+            case .failure(let error):
+                XCTFail("Bundled ship failed to load: \(error)")
+            }
+            ready.fulfill()
+        }
+        wait(for: [ready], timeout: 40)
+    }
+
     func testGLBWithEmbeddedTextureAndNodeAnimation() throws {
         // Embedded 1px PNG, UVs, metallic-roughness material, triangle mesh and glTF rotation clip.
         let data = try XCTUnwrap(Data(base64Encoded: "Z2xURgIAAACwBgAAtAUAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAiLCJnZW5lcmF0b3IiOiJTaGFkZXJMYWJUZXN0In0sImJ1ZmZlcnMiOlt7ImJ5dGVMZW5ndGgiOjIyNH1dLCJidWZmZXJWaWV3cyI6W3siYnVmZmVyIjowLCJieXRlT2Zmc2V0IjowLCJieXRlTGVuZ3RoIjozNiwidGFyZ2V0IjozNDk2Mn0seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjM2LCJieXRlTGVuZ3RoIjozNiwidGFyZ2V0IjozNDk2Mn0seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjcyLCJieXRlTGVuZ3RoIjoyNCwidGFyZ2V0IjozNDk2Mn0seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjk2LCJieXRlTGVuZ3RoIjo2LCJ0YXJnZXQiOjM0OTYzfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MTA0LCJieXRlTGVuZ3RoIjo4fSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6MTEyLCJieXRlTGVuZ3RoIjozMn0seyJidWZmZXIiOjAsImJ5dGVPZmZzZXQiOjE0NCwiYnl0ZUxlbmd0aCI6Nzd9XSwiYWNjZXNzb3JzIjpbeyJidWZmZXJWaWV3IjowLCJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6MywidHlwZSI6IlZFQzMiLCJtaW4iOlstMC41LDAsMF0sIm1heCI6WzAuNSwxLDBdfSx7ImJ1ZmZlclZpZXciOjEsImNvbXBvbmVudFR5cGUiOjUxMjYsImNvdW50IjozLCJ0eXBlIjoiVkVDMyJ9LHsiYnVmZmVyVmlldyI6MiwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjMsInR5cGUiOiJWRUMyIn0seyJidWZmZXJWaWV3IjozLCJjb21wb25lbnRUeXBlIjo1MTIzLCJjb3VudCI6MywidHlwZSI6IlNDQUxBUiJ9LHsiYnVmZmVyVmlldyI6NCwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjIsInR5cGUiOiJTQ0FMQVIiLCJtaW4iOlswXSwibWF4IjpbMV19LHsiYnVmZmVyVmlldyI6NSwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjIsInR5cGUiOiJWRUM0In1dLCJpbWFnZXMiOlt7ImJ1ZmZlclZpZXciOjYsIm1pbWVUeXBlIjoiaW1hZ2UvcG5nIn1dLCJ0ZXh0dXJlcyI6W3sic291cmNlIjowfV0sIm1hdGVyaWFscyI6W3sicGJyTWV0YWxsaWNSb3VnaG5lc3MiOnsiYmFzZUNvbG9yVGV4dHVyZSI6eyJpbmRleCI6MH0sIm1ldGFsbGljRmFjdG9yIjowLjYsInJvdWdobmVzc0ZhY3RvciI6MC4yfX1dLCJtZXNoZXMiOlt7InByaW1pdGl2ZXMiOlt7ImF0dHJpYnV0ZXMiOnsiUE9TSVRJT04iOjAsIk5PUk1BTCI6MSwiVEVYQ09PUkRfMCI6Mn0sImluZGljZXMiOjMsIm1hdGVyaWFsIjowfV19XSwibm9kZXMiOlt7Im5hbWUiOiJBbmltYXRlZFRyaWFuZ2xlIiwibWVzaCI6MH1dLCJzY2VuZXMiOlt7Im5vZGVzIjpbMF19XSwic2NlbmUiOjAsImFuaW1hdGlvbnMiOlt7Im5hbWUiOiJzcGluIiwiY2hhbm5lbHMiOlt7InNhbXBsZXIiOjAsInRhcmdldCI6eyJub2RlIjowLCJwYXRoIjoicm90YXRpb24ifX1dLCJzYW1wbGVycyI6W3siaW5wdXQiOjQsIm91dHB1dCI6NSwiaW50ZXJwb2xhdGlvbiI6IkxJTkVBUiJ9XX1dfeAAAABCSU4AAAAAvwAAAAAAAAAAAAAAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAD8AAIA/AAABAAIAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAPMENT/zBDU/iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGPcF2Dzn4GBgYGJAQoAI0oCTQRZC54AAAAASUVORK5CYIIAAAA="))
@@ -380,7 +415,7 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(Shape3D.allCases.count, 9)
         XCTAssertEqual(Shading3D.allCases.count, 5)
         XCTAssertEqual(Set(Shading3D.allCases.map { $0.lighting.rawValue }).count, 5)
-        for shape in Shape3D.allCases where shape != .imported {
+        for shape in Shape3D.allCases where shape != .imported && shape != .ship {
             for mode in Shading3D.allCases {
                 let s = scene(mode, shape: shape)
                 let model = try XCTUnwrap(s.rootNode.childNode(withName: "model", recursively: false))
@@ -393,7 +428,7 @@ final class ShaderLabTests: XCTestCase {
     func testRenderAll35CombinationsAndDistinctModes() throws {
         var spherePixels: [[UInt8]] = []
         var matrix: [[String: Any]] = []
-        for (i, shape) in Shape3D.allCases.enumerated() where shape != .imported {
+        for (i, shape) in Shape3D.allCases.enumerated() where shape != .imported && shape != .ship {
             for (j, mode) in Shading3D.allCases.enumerated() {
                 let image = try autoreleasepool { try render(scene(mode, shape: shape), name: "shape-\(i)-mode-\(j)") }
                 // A visible silhouette must differ from the corner background in many pixels.
