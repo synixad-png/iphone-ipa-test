@@ -114,6 +114,7 @@ struct DoomSharewareView: View {
             DoomLandscapeView(frame: screenshot,
                               move: { axis in updateAxis(axis, movement: true) },
                               aim: { axis in updateAxis(axis, movement: false) },
+                              lookMotion: { delta in doom_bridge_look(Float(delta)) },
                               interact: { pressed in doom_bridge_key(0xa2, pressed ? 1 : 0) },
                               fire: { pressed in doom_bridge_key(0xa3, pressed ? 1 : 0) },
                               menu: { pressed in doom_bridge_key(27, pressed ? 1 : 0) },
@@ -227,7 +228,7 @@ struct DoomSharewareView: View {
                         ZStack {
                             HStack(spacing: 0) {
                                 DoomGestureMovementZone { updateAxis($0, movement: true) }
-                                DoomGestureLookZone(sensitivity: lookSensitivity) { updateAxis($0, movement: false) }
+                                DoomGestureLookZone(sensitivity: lookSensitivity) { doom_bridge_look(Float($0)) }
                             }
                             DoomPressControl(title: "OGIEŃ", symbol: "scope") { pressed in
                                 doom_bridge_key(0xa3, pressed ? 1 : 0)
