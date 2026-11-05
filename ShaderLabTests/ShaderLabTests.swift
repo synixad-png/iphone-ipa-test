@@ -66,6 +66,19 @@ final class ShaderLabTests: XCTestCase {
         return false
     }
 
+    func testPS4StickDeadZoneAndVectorMapping() {
+        let idle = PS4Controller.vector(x: 0.07, y: -0.04)
+        XCTAssertEqual(idle.dx, 0, accuracy: 0.0001)
+        XCTAssertEqual(idle.dy, 0, accuracy: 0.0001)
+        let full = PS4Controller.vector(x: 1, y: 0)
+        XCTAssertEqual(full.dx, 1, accuracy: 0.0001)
+        XCTAssertEqual(full.dy, 0, accuracy: 0.0001)
+        let negative = PS4Controller.vector(x: -0.6, y: 0)
+        XCTAssertLessThan(negative.dx, -0.4)
+        let diagonal = PS4Controller.vector(x: 0.8, y: 0.8)
+        XCTAssertLessThanOrEqual(hypot(diagonal.dx, diagonal.dy), 1.0001)
+    }
+
     func testPaintCanvasHasNoScrollableAncestor() {
         let controller = UIHostingController(rootView: PaintView())
         // SwiftUI representables are inserted only when the host is mounted in a window.
