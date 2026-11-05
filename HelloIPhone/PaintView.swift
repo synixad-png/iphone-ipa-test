@@ -239,6 +239,7 @@ struct PaintView: View {
     @State private var showClearConfirmation = false
     @State private var exportImage: UIImage?
     @State private var showShare = false
+    @State private var canvasSize = CGSize(width: 600, height: 450)
 
     var body: some View {
         GeometryReader { layout in
@@ -269,6 +270,8 @@ struct PaintView: View {
                         PaintCanvasRepresentable(document: document)
                             .frame(width: canvas.size.width, height: canvas.size.height)
                             .background(Color.white)
+                            .onAppear { canvasSize = canvas.size }
+                            .onChange(of: canvas.size) { canvasSize = $0 }
                             .accessibilityLabel("Pełnoekranowe płótno Paint do rysowania palcem lub Apple Pencil")
                     }
                     .background(.white)
@@ -415,8 +418,9 @@ struct PaintView: View {
 
             Button {
                 // Keep the export's pixel dimensions stable between screen orientations.
+                let ratio = max(0.3, min(4.0, canvasSize.height / max(1, canvasSize.width)))
                 exportImage = PaintDocument.render(
-                    document.strokes, size: CGSize(width: 1400, height: 1000))
+                    document.strokes, size: CGSize(width: 1400, height: 1400 * ratio))
                 showShare = true
             } label: {
                 if compact {
