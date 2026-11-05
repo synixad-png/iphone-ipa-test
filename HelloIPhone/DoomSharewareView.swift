@@ -21,6 +21,7 @@ struct DoomSharewareView: View {
     @State private var analogPressed = Set<Int32>()
     @State private var controllerPressed = Set<Int32>()
     @State private var controllerConnected = false
+    @State private var controllerActive = false
     @AppStorage("doom.touch.mode") private var touchMode = "analog"
     @AppStorage("doom.touch.lookSensitivity") private var lookSensitivity: Double = 1.4
     @AppStorage("doom.touch.fireHorizontal") private var fireHorizontal: Double = 0.78
@@ -151,6 +152,7 @@ struct DoomSharewareView: View {
             }
         }
         .onAppear {
+            controllerActive = true
             PS4Controller.discover()
             configureSound()
             doom_audio_set_volume(effectsEnabled ? Float(effectsVolume) : 0)
@@ -166,6 +168,7 @@ struct DoomSharewareView: View {
         }
         .onChange(of: touchMode) { _ in releaseAllKeys() }
         .onDisappear {
+            controllerActive = false
             releaseAllKeys()
             doom_bridge_pause(1)
         }
@@ -443,7 +446,7 @@ struct DoomSharewareView: View {
     }
 
     private func updateControllerInput() {
-        guard let pad = PS4Controller.pad else {
+        guard controllerActive, let pad = PS4Controller.pad else {
             controllerConnected = false
             for key in controllerPressed where !analogPressed.contains(key) {
                 doom_bridge_key(key, 0)
