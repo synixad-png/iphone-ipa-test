@@ -4,6 +4,8 @@
  classes = {};
  objectVersion = 56;
  objects = {
+  S10000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = file; path = Statek_Bez_Animacji_v57_EDYCJA_v601.glb; sourceTree = "<group>"; };
+  S10000000000000000000002 = {isa = PBXBuildFile; fileRef = S10000000000000000000001; };
   G10000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLandscape.swift; sourceTree = "<group>"; };
   G10000000000000000000002 = {isa = PBXBuildFile; fileRef = G10000000000000000000001; };
   F10000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoomSharewareView.swift; sourceTree = "<group>"; };
@@ -21,11 +23,11 @@
   A10000000000000000000002 = {isa = PBXBuildFile; fileRef = A10000000000000000000001; };
   A10000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HelloIPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
   A10000000000000000000004 = {isa = PBXGroup; children = (A10000000000000000000005, A10000000000000000000006, B10000000000000000000005,); sourceTree = "<group>"; };
-  A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000001,C10000000000000000000003,D10000000000000000000001,E10000000000000000000001,F10000000000000000000001,G10000000000000000000001,); path = HelloIPhone; sourceTree = "<group>"; };
+  A10000000000000000000005 = {isa = PBXGroup; children = (A10000000000000000000001,S10000000000000000000001,C10000000000000000000003,D10000000000000000000001,E10000000000000000000001,F10000000000000000000001,G10000000000000000000001,); path = HelloIPhone; sourceTree = "<group>"; };
   A10000000000000000000006 = {isa = PBXGroup; children = (A10000000000000000000003,B10000000000000000000003,); name = Products; sourceTree = "<group>"; };
   A10000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000002,C10000000000000000000004,D10000000000000000000002,E10000000000000000000002,F10000000000000000000002,G10000000000000000000002,); runOnlyForDeploymentPostprocessing = 0; };
   A10000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000005,); runOnlyForDeploymentPostprocessing = 0; };
-  A10000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  A10000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (S10000000000000000000002,); runOnlyForDeploymentPostprocessing = 0; };
   A1000000000000000000000A = {isa = PBXNativeTarget; buildConfigurationList = A1000000000000000000000D; buildPhases = (A10000000000000000000007,A10000000000000000000008,A10000000000000000000009,); buildRules = (); dependencies = (); name = HelloIPhone; productName = HelloIPhone; productReference = A10000000000000000000003; packageProductDependencies = (C10000000000000000000002,); productType = "com.apple.product-type.application"; };
   A1000000000000000000000B = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; TargetAttributes = {A1000000000000000000000A = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = A1000000000000000000000C; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = A10000000000000000000004; productRefGroup = A10000000000000000000006; projectDirPath = ""; packageReferences = (C10000000000000000000001,); projectRoot = ""; targets = (A1000000000000000000000A,B1000000000000000000000A,); };
   A1000000000000000000000C = {isa = XCConfigurationList; buildConfigurations = (A1000000000000000000000E,A1000000000000000000000F,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
