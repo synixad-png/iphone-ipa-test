@@ -841,6 +841,14 @@ final class AsteroidsArcadeScene: SKScene {
     var shooting = false
     var moveAnalog = CGVector.zero
     var aimAnalog = CGVector.zero
+    // Controller state is kept separate from on-screen sticks to avoid lost touch input.
+    var controllerActive = false
+    private var controllerMove = CGVector.zero
+    private var controllerAim = CGVector.zero
+    private var controllerFiring = false
+    private var controllerBoostWasPressed = false
+    private var controllerRestartWasPressed = false
+    private(set) var controllerConnected = false
     private(set) var shieldTime: TimeInterval = 0
     private(set) var boostCooldown: TimeInterval = 0
     private(set) var rapidFireTime: TimeInterval = 0
@@ -1288,6 +1296,27 @@ final class AsteroidsArcadeScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        // Poll the OS-provided extended/DualShock profile on each SpriteKit frame.
+        // Cross = boost, R2 = shoot, Options = restart; touch works concurrently.
+        if controllerActive, let pad = PS4Controller.pad {
+            controllerConnected = true
+            controllerMove = PS4Controller.stick(pad.leftThumbstick)
+            controllerAim = PS4Controller.stick(pad.rightThumbstick)
+            controllerFiring = pad.rightTrigger.isPressed || pad.rightShoulder.isPressed
+            let boost = pad.buttonA.isPressed
+            if boost && !controllerBoostWasPressed { activateBoost() }
+            controllerBoostWasPressed = boost
+            let restartPressed = pad.buttonMenu.isPressed
+            if restartPressed && !controllerRestartWasPressed { restart() }
+            controllerRestartWasPressed = restartPressed
+        } else {
+            controllerConnected = false
+            controllerMove = .zero
+            controllerAim = .zero
+            controllerFiring = false
+            controllerBoostWasPressed = false
+            controllerRestartWasPressed = false
+        }
         if lastUpdate == 0 { lastUpdate = currentTime; return }
         let dt = min(max(currentTime - lastUpdate, 0), 1.0/30.0)
         lastUpdate = currentTime
@@ -1303,20 +1332,22 @@ final class AsteroidsArcadeScene: SKScene {
         rapidFireTime = max(0, rapidFireTime - dt)
         boostCooldown = max(0, boostCooldown - dt)
 
-        let moveMagnitude = min(1, hypot(moveAnalog.dx, moveAnalog.dy))
-        let aimMagnitude = min(1, hypot(aimAnalog.dx, aimAnalog.dy))
+        let move = hypot(controllerMove.dx, controllerMove.dy) > 0 ? controllerMove : moveAnalog
+        let aim = hypot(controllerAim.dx, controllerAim.dy) > 0 ? controllerAim : aimAnalog
+        let moveMagnitude = min(1, hypot(move.dx, move.dy))
+        let aimMagnitude = min(1, hypot(aim.dx, aim.dy))
         if aimMagnitude > 0.20 {
-            shipAngle = atan2(aimAnalog.dy, aimAnalog.dx)
+            shipAngle = atan2(aim.dy, aim.dx)
         } else if moveMagnitude > 0.20 {
-            shipAngle = atan2(moveAnalog.dy, moveAnalog.dx)
+            shipAngle = atan2(move.dy, move.dx)
         } else {
             if turnLeft { shipAngle += 3.7 * t }
             if turnRight { shipAngle -= 3.7 * t }
         }
         ship.zRotation = shipAngle
         let isThrusting = accelerating || moveMagnitude > 0.20
-        let thrustX = moveMagnitude > 0.20 ? moveAnalog.dx : cos(shipAngle)
-        let thrustY = moveMagnitude > 0.20 ? moveAnalog.dy : sin(shipAngle)
+        let thrustX = moveMagnitude > 0.20 ? move.dx : cos(shipAngle)
+        let thrustY = moveMagnitude > 0.20 ? move.dy : sin(shipAngle)
         let thrustScale = moveMagnitude > 0.20 ? moveMagnitude : 1
         shipFlame.isHidden = !isThrusting
         if isThrusting {
@@ -1348,7 +1379,7 @@ final class AsteroidsArcadeScene: SKScene {
 
         shieldRing.position = ship.position
         shotCooldown -= dt
-        if (shooting || aimMagnitude > 0.20) && shotCooldown <= 0 {
+        if (shooting || controllerFiring || hypot(aimAnalog.dx, aimAnalog.dy) > 0.20) && shotCooldown <= 0 {
             fire()
             shotCooldown = rapidFireTime > 0 ? 0.075 : 0.18
         }
@@ -1584,6 +1615,7 @@ struct AsteroidsGameView: View {
             }
         }
         .onDisappear {
+            scene.controllerActive = fullScreen
             scene.moveAnalog = .zero
             scene.aimAnalog = .zero
             scene.turnLeft = false
@@ -1592,7 +1624,11 @@ struct AsteroidsGameView: View {
             scene.shooting = false
             if !fullScreen { scene.isPaused = true }
         }
-        .onAppear { scene.isPaused = false }
+        .onAppear {
+            PS4Controller.discover()
+            scene.controllerActive = true
+            scene.isPaused = false
+        }
     }
 }
 
