@@ -18,7 +18,7 @@ jobs:
   build-ipa:
     if: ${{ github.event.repository.private == false }}
     runs-on: macos-15-intel
-    timeout-minutes: 25
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Check Xcode project and environment
