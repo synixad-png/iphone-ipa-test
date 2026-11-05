@@ -221,6 +221,24 @@ struct DoomSharewareView: View {
                 }
             }
             .aspectRatio(4.0 / 3.0, contentMode: .fit)
+            .overlay {
+                if touchMode == "gestures" {
+                    GeometryReader { area in
+                        ZStack {
+                            HStack(spacing: 0) {
+                                DoomGestureMovementZone { updateAxis($0, movement: true) }
+                                DoomGestureLookZone(sensitivity: lookSensitivity) { updateAxis($0, movement: false) }
+                            }
+                            DoomPressControl(title: "OGIEŃ", symbol: "scope") { pressed in
+                                doom_bridge_key(0xa3, pressed ? 1 : 0)
+                            }
+                            .frame(width: 74, height: 44)
+                            .position(x: area.size.width * (0.56 + fireHorizontal * 0.38),
+                                      y: area.size.height * (0.20 + fireVertical * 0.65))
+                        }
+                    }
+                }
+            }
             .overlay(alignment: .bottom) {
                 if touchMode == "analog" {
                 HStack(alignment: .bottom) {
@@ -238,17 +256,6 @@ struct DoomSharewareView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 7)
-                } else {
-                    HStack {
-                        Text("GESTY: LEWA — RUCH · PRAWA — OBRÓT")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.85))
-                        Spacer()
-                        DoomPressControl(title: "OGIEŃ", symbol: "scope") { pressed in
-                            doom_bridge_key(0xa3, pressed ? 1 : 0)
-                        }
-                    }
-                    .padding(8)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
