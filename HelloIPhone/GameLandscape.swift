@@ -202,9 +202,11 @@ struct DoomLandscapeView: View {
                     }
                     .ignoresSafeArea()
                     DoomPressControl(title: "OGIEŃ", symbol: "scope", action: fire)
+                        .frame(width: 96, height: 52)
                         .position(x: g.size.width * (0.56 + fireHorizontal * 0.38),
                                   y: g.size.height * (0.20 + fireVertical * 0.65))
                     DoomPressControl(title: "UŻYJ", symbol: "hand.tap", action: interact)
+                        .frame(width: 82, height: 45)
                         .position(x: g.size.width * 0.82, y: g.size.height * 0.83)
                 }
                 VStack {
