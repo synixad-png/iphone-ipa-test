@@ -66,6 +66,24 @@ final class ShaderLabTests: XCTestCase {
         return false
     }
 
+    func testDoomDisplayResolutionsAndFramebufferConversion() throws {
+        let sizes = DoomDisplayResolution.allCases.map { ($0.width, $0.height) }
+        XCTAssertEqual(sizes.map { $0.0 }, [160, 240, 320, 640, 1280])
+        XCTAssertEqual(sizes.map { $0.1 }, [100, 150, 200, 400, 800])
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 200)).image { context in
+            UIColor.systemRed.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 160, height: 200))
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 160, y: 0, width: 160, height: 200))
+        }
+        let cg = try XCTUnwrap(source.cgImage)
+        for preset in DoomDisplayResolution.allCases {
+            let converted = DoomDisplayResolution.convert(cg, to: preset)
+            XCTAssertEqual(converted.cgImage?.width, preset.width)
+            XCTAssertEqual(converted.cgImage?.height, preset.height)
+        }
+    }
+
     func testPS4StickDeadZoneAndVectorMapping() {
         let idle = PS4Controller.vector(x: 0.07, y: -0.04)
         XCTAssertEqual(idle.dx, 0, accuracy: 0.0001)
