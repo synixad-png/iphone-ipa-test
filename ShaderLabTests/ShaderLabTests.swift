@@ -341,7 +341,16 @@ final class ShaderLabTests: XCTestCase {
                 XCTAssertFalse(materials.isEmpty, "GLB must have a visible mesh")
                 XCTAssertNotNil(materials.first?.diffuse.contents, "Embedded texture/material missing")
                 XCTAssertEqual(asset.meshCount, 1)
-                XCTAssertTrue(asset.animationTarget.isDescendant(of: asset.root),
+                var ancestor: SCNNode? = asset.animationTarget
+                var rootIsAncestor = false
+                while let current = ancestor {
+                    if current === asset.root {
+                        rootIsAncestor = true
+                        break
+                    }
+                    ancestor = current.parent
+                }
+                XCTAssertTrue(rootIsAncestor,
                               "The GLB animation root must remain within the imported hierarchy")
                 // Verify an actually rendered mesh, not just successful JSON/texture decoding.
                 if MTLCreateSystemDefaultDevice() != nil {
