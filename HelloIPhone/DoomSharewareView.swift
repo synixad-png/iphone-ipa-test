@@ -19,6 +19,8 @@ struct DoomSharewareView: View {
     @State private var moveAxis = CGVector.zero
     @State private var aimAxis = CGVector.zero
     @State private var analogPressed = Set<Int32>()
+    @State private var controllerPressed = Set<Int32>()
+    @State private var controllerConnected = false
     @AppStorage("doom.touch.mode") private var touchMode = "analog"
     @AppStorage("doom.touch.lookSensitivity") private var lookSensitivity: Double = 1.4
     @AppStorage("doom.touch.fireHorizontal") private var fireHorizontal: Double = 0.78
@@ -149,6 +151,7 @@ struct DoomSharewareView: View {
             }
         }
         .onAppear {
+            PS4Controller.discover()
             configureSound()
             doom_audio_set_volume(effectsEnabled ? Float(effectsVolume) : 0)
             hasWad = FileManager.default.fileExists(atPath: wadURL.path)
@@ -167,6 +170,7 @@ struct DoomSharewareView: View {
             doom_bridge_pause(1)
         }
         .onReceive(poll) { _ in
+            updateControllerInput()
             guard started else { return }
             if doom_bridge_status() < 0 {
                 loading = false
@@ -272,6 +276,14 @@ struct DoomSharewareView: View {
     private var controlsPanel: some View {
         VStack(alignment: .leading, spacing: 13) {
             LabSectionTitle(title: "STEROWANIE DOTYKOWE", symbol: "hand.draw")
+            HStack(spacing: 6) {
+                Image(systemName: "gamecontroller.fill")
+                Text(controllerConnected ? "PAD PS4 / KOMPATYBILNY · POŁĄCZONY" : "PAD PS4 · POŁĄCZ PRZEZ BLUETOOTH")
+            }
+            .font(.caption.bold())
+            .foregroundStyle(controllerConnected ? .green : LabStyle.muted)
+            Text("DualShock 4: lewy drążek — ruch i krok w bok; prawy — rozglądanie; R2 — strzał; X — użyj; OPTIONS — menu; trójkąt — mapa; kółko — ENTER. Ekran dotykowy pozostaje aktywny.")
+                .font(.caption).foregroundStyle(LabStyle.muted)
             Picker("Tryb sterowania", selection: $touchMode) {
                 Text("Widoczne analogi").tag("analog")
                 Text("Gesty bez analogów").tag("gestures")
@@ -421,15 +433,56 @@ struct DoomSharewareView: View {
         if moveAxis.dx > 0.23 { wanted.insert(0xa1) }
         if aimAxis.dx < -0.23 { wanted.insert(0xac) }
         if aimAxis.dx > 0.23 { wanted.insert(0xae) }
-        for key in analogPressed.subtracting(wanted) { doom_bridge_key(key, 0) }
-        for key in wanted.subtracting(analogPressed) { doom_bridge_key(key, 1) }
+        for key in analogPressed.subtracting(wanted) where !controllerPressed.contains(key) {
+            doom_bridge_key(key, 0)
+        }
+        for key in wanted.subtracting(analogPressed) where !controllerPressed.contains(key) {
+            doom_bridge_key(key, 1)
+        }
         analogPressed = wanted
+    }
+
+    private func updateControllerInput() {
+        guard let pad = PS4Controller.pad else {
+            controllerConnected = false
+            for key in controllerPressed where !analogPressed.contains(key) {
+                doom_bridge_key(key, 0)
+            }
+            controllerPressed.removeAll()
+            return
+        }
+        controllerConnected = true
+        guard started else { return }
+        let left = PS4Controller.stick(pad.leftThumbstick)
+        let right = PS4Controller.stick(pad.rightThumbstick)
+        var wanted = Set<Int32>()
+        if left.dy > 0.23 { wanted.insert(0xad) }
+        if left.dy < -0.23 { wanted.insert(0xaf) }
+        if left.dx < -0.23 { wanted.insert(0xa0) }
+        if left.dx > 0.23 { wanted.insert(0xa1) }
+        if pad.rightTrigger.isPressed || pad.rightShoulder.isPressed { wanted.insert(0xa3) }
+        if pad.buttonA.isPressed { wanted.insert(0xa2) } // Cross: use doors/switches
+        if pad.buttonMenu.isPressed { wanted.insert(27) } // Options: Doom menu
+        if pad.buttonY.isPressed { wanted.insert(9) } // Triangle: automap
+        if pad.buttonB.isPressed { wanted.insert(13) } // Circle: Enter
+        for key in controllerPressed.subtracting(wanted) where !analogPressed.contains(key) {
+            doom_bridge_key(key, 0)
+        }
+        for key in wanted.subtracting(controllerPressed) where !analogPressed.contains(key) {
+            doom_bridge_key(key, 1)
+        }
+        controllerPressed = wanted
+        // Native mouse motion gives smooth relative turn without key repeat.
+        if abs(right.dx) > 0.01 {
+            doom_bridge_look(Float(right.dx * CGFloat(lookSensitivity) * 5.0))
+        }
     }
 
     private func releaseAllKeys() {
         moveAxis = .zero
         aimAxis = .zero
         analogPressed.removeAll()
+        controllerPressed.removeAll()
         for key in [Int32](arrayLiteral: 0xa0, 0xa1, 0xac, 0xad, 0xae, 0xaf, 0xa3, 0xa2, 27, 13, 9) {
             doom_bridge_key(key, 0)
         }
