@@ -68,8 +68,16 @@ final class ShaderLabTests: XCTestCase {
 
     func testPaintCanvasHasNoScrollableAncestor() {
         let controller = UIHostingController(rootView: PaintView())
-        controller.view.frame = CGRect(x: 0, y: 0, width: 393, height: 760)
+        // SwiftUI representables are inserted only when the host is mounted in a window.
+        // Laying out a detached UIHostingController alone produces false "missing view" failures.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 760))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        controller.view.frame = window.bounds
         controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
         controller.view.layoutIfNeeded()
         guard let canvas = findUIElement(PaintSurfaceView.self, in: controller.view) else {
             XCTFail("The paint canvas must be visible on a portrait iPhone")
@@ -81,8 +89,16 @@ final class ShaderLabTests: XCTestCase {
 
     func testShaderLabPreviewHasNoScrollableAncestor() {
         let controller = UIHostingController(rootView: ShaderLabView())
-        controller.view.frame = CGRect(x: 0, y: 0, width: 393, height: 760)
+        // SwiftUI representables are inserted only when the host is mounted in a window.
+        // Laying out a detached UIHostingController alone produces false "missing view" failures.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 760))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        controller.view.frame = window.bounds
         controller.view.setNeedsLayout()
+        controller.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
         controller.view.layoutIfNeeded()
         guard let preview = findUIElement(SCNView.self, in: controller.view) else {
             XCTFail("Shader Lab preview must be visible on a portrait iPhone")
