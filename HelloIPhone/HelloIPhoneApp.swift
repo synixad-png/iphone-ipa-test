@@ -13,7 +13,7 @@ struct HelloIPhoneApp: App {
 }
 
 enum Shape3D: String, CaseIterable, Identifiable {
-    case sphere = "Kula", cube = "Sześcian", torus = "Torus", cone = "Stożek", cylinder = "Walec", pyramid = "Ostrosłup", capsule = "Kapsuła", knot = "Chromowy węzeł", imported = "Własny GLB"
+    case sphere = "Kula", cube = "Sześcian", torus = "Torus", cone = "Stożek", cylinder = "Walec", pyramid = "Ostrosłup", capsule = "Kapsuła", knot = "Chromowy węzeł", ship = "Statek v601", imported = "Własny GLB"
     var id: String { rawValue }
     var geometry: SCNGeometry {
         switch self {
@@ -27,7 +27,7 @@ enum Shape3D: String, CaseIterable, Identifiable {
         case .pyramid: return SCNPyramid(width: 1.8, height: 1.9, length: 1.8)
         case .capsule: return SCNCapsule(capRadius: 0.7, height: 2)
         case .knot: return SCNSphere(radius: 0.85)
-        case .imported: return SCNSphere(radius: 0.85)
+        case .ship, .imported: return SCNSphere(radius: 0.85)
         }
     }
 }
@@ -125,6 +125,7 @@ enum GLBKnot {
 enum ShaderScene {
     static var knot: SCNGeometry?
     static var imported: GLBSceneLoader.Loaded?
+    static var ship: GLBSceneLoader.Loaded?
     static let background = UIColor(red: 0.035, green: 0.055, blue: 0.1, alpha: 1)
     static let environment: UIImage = {
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
@@ -209,13 +210,14 @@ enum ShaderScene {
                        color: UIColor, metalness: Double, roughness: Double, spinning: Bool,
                        effect: SurfaceFX = .normal, lightPreset: LightPreset = .studio, lightPower: Double = 1.0) {
         guard let model = scene.rootNode.childNode(withName: "model", recursively: false) else { return }
-        if shape == .imported {
-            if let imported, model.childNodes.first !== imported.root {
+        if shape == .imported || shape == .ship {
+            let selected = shape == .ship ? ship : imported
+            if let selected, model.childNodes.first !== selected.root {
                 model.removeAllAnimations()
                 model.removeAction(forKey: "spin")
                 for child in model.childNodes { child.removeFromParentNode() }
                 model.geometry = nil
-                model.addChildNode(imported.root)
+                model.addChildNode(selected.root)
                 
             }
             // Preserve imported glTF material textures. Controls for built-in shapes must not overwrite them.
@@ -227,12 +229,12 @@ enum ShaderScene {
             }
         }
         let shapeID = "shape:" + shape.rawValue
-        if shape != .imported && model.geometry?.name != shapeID {
+        if shape != .imported && shape != .ship && model.geometry?.name != shapeID {
             model.geometry = shape == .knot ? (knot ?? shape.geometry) : shape.geometry
             model.geometry?.name = shapeID
         }
         let chrome = shape == .knot
-        if shape != .imported {
+        if shape != .imported && shape != .ship {
             model.geometry?.materials = [material(shading, color: chrome ? UIColor(red: 0.92, green: 0.92, blue: 0.94, alpha: 1) : color, metalness: chrome ? 0.93 : metalness, roughness: chrome ? 0.115 : roughness, effect: effect)]
         }
         let palette: (UIColor, UIColor)
@@ -421,6 +423,8 @@ struct ShaderLabView: View {
     @State private var knotError: String?
     @State private var showGLBImporter = false
     @State private var importedRevision = 0
+    @State private var shipRevision = 0
+    @State private var shipError: String?
     @State private var importedName = ""
     @State private var playGLB = true
     @State private var clipIndex = 0
@@ -504,6 +508,7 @@ struct ShaderLabView: View {
         .tint(LabStyle.accent)
         .preferredColorScheme(.dark)
         .onAppear {
+            loadBundledShip()
             if ShaderScene.imported == nil && FileManager.default.fileExists(atPath: savedGLBURL.path) {
                 loadImported(savedGLBURL, filename: UserDefaults.standard.string(forKey: "shaderlab.importedFilename") ?? savedGLBName)
             }
@@ -586,7 +591,7 @@ struct ShaderLabView: View {
             ModelView(shape: shape, shading: shading, metalness: metalness, roughness: roughness,
                       spinning: spinning, effect: effect, lightPreset: lightPreset,
                       lightPower: lightPower, color: swatches[selectedColor].1,
-                      knotRevision: knotRevision, importedRevision: importedRevision,
+                      knotRevision: knotRevision + shipRevision, importedRevision: importedRevision,
                       clipIndex: clipIndex, playGLB: playGLB)
                 .frame(height: height)
                 .background(LabStyle.background, in: RoundedRectangle(cornerRadius: 16))
@@ -618,6 +623,7 @@ struct ShaderLabView: View {
                     ForEach(Shape3D.allCases.filter { $0 != .knot && $0 != .imported }) { item in
                         Button {
                             shape = item
+                            if item == .ship && ShaderScene.ship == nil { loadBundledShip() }
                         } label: {
                             HStack(spacing: 7) {
                                 Image(systemName: item == .imported ? "square.and.arrow.down" : "cube")
@@ -632,6 +638,10 @@ struct ShaderLabView: View {
                         .buttonStyle(LabChipStyle(active: shape == item))
                         .accessibilityAddTraits(shape == item ? .isSelected : [])
                     }
+                }
+                if shape == .ship {
+                    Text(ShaderScene.ship != nil ? "Statek v601 — model dołączony do aplikacji" : (shipError ?? "Wczytywanie statku…"))
+                        .font(.caption).foregroundStyle(LabStyle.muted)
                 }
                 Button {
                     showGLBImporter = true
@@ -751,6 +761,24 @@ struct ShaderLabView: View {
                     .foregroundStyle(LabStyle.muted)
             }
             .labPanel()
+            }
+        }
+    }
+
+    private func loadBundledShip() {
+        guard ShaderScene.ship == nil else { return }
+        guard let url = Bundle.main.url(forResource: "Statek_Bez_Animacji_v57_EDYCJA_v601", withExtension: "glb") else {
+            shipError = "Brak statku GLB w zasobach aplikacji."
+            return
+        }
+        GLBSceneLoader.load(from: url) { result in
+            switch result {
+            case .success(let loaded):
+                ShaderScene.ship = loaded
+                shipError = nil
+                shipRevision += 1
+            case .failure(let error):
+                shipError = "Błąd modelu statku: \(error.localizedDescription)"
             }
         }
     }
