@@ -124,7 +124,7 @@ struct AsteroidsLandscapeView: View {
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
-        .onAppear { GameLandscapeMode.set(true); scene.isPaused = false }
+        .onAppear { PS4Controller.discover(); scene.controllerActive = true; GameLandscapeMode.set(true); scene.isPaused = false }
         .onDisappear { scene.moveAnalog = .zero; scene.aimAnalog = .zero; GameLandscapeMode.set(false) }
     }
 }
