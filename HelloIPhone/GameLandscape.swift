@@ -135,10 +135,8 @@ struct DoomGestureMovementZone: View {
 
 struct DoomGestureLookZone: View {
     let sensitivity: Double
-    let onVector: (CGVector) -> Void
+    let onMotion: (Double) -> Void
     @State private var previous = CGSize.zero
-    @State private var lastMotion = Date.distantPast
-    private let clock = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Color.clear.contentShape(Rectangle())
@@ -146,32 +144,21 @@ struct DoomGestureLookZone: View {
                 .onChanged { value in
                     let delta = value.translation.width - previous.width
                     previous = value.translation
-                    // Turn only while the finger moves; a stationary finger never
-                    // holds a virtual stick at maximum deflection.
-                    let threshold = CGFloat(1.8 / max(0.5, sensitivity))
-                    if abs(delta) >= threshold {
-                        onVector(CGVector(dx: delta > 0 ? 1 : -1, dy: 0))
-                        lastMotion = Date()
+                    if abs(delta) > 0.01 {
+                        // Native Doom ev_mouse deltas: no return-to-center or key-repeat lag.
+                        onMotion(Double(delta) * sensitivity)
                     }
                 }
-                .onEnded { _ in
-                    previous = .zero
-                    lastMotion = .distantPast
-                    onVector(.zero)
-                })
-            .onReceive(clock) { now in
-                if now.timeIntervalSince(lastMotion) > 0.075 && lastMotion != .distantPast {
-                    lastMotion = .distantPast
-                    onVector(.zero)
-                }
-            }
-            .accessibilityLabel("Prawy obszar: rozglądanie się przesunięciem palca")
+                .onEnded { _ in previous = .zero })
+            .onDisappear { previous = .zero }
+            .accessibilityLabel("Prawy obszar: płynne rozglądanie przesunięciem palca")
 }
 
 struct DoomLandscapeView: View {
     let frame: UIImage?
     let move: (CGVector) -> Void
     let aim: (CGVector) -> Void
+    let lookMotion: (Double) -> Void
     let interact: (Bool) -> Void
     let fire: (Bool) -> Void
     let menu: (Bool) -> Void
@@ -198,7 +185,7 @@ struct DoomLandscapeView: View {
                 if touchMode == "gestures" {
                     HStack(spacing: 0) {
                         DoomGestureMovementZone(onVector: move)
-                        DoomGestureLookZone(sensitivity: lookSensitivity, onVector: aim)
+                        DoomGestureLookZone(sensitivity: lookSensitivity, onMotion: lookMotion)
                     }
                     .ignoresSafeArea()
                     DoomPressControl(title: "OGIEŃ", symbol: "scope", action: fire)
