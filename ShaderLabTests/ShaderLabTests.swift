@@ -324,6 +324,25 @@ final class ShaderLabTests: XCTestCase {
                 }
                 XCTAssertFalse(materials.isEmpty, "GLB must have a visible mesh")
                 XCTAssertNotNil(materials.first?.diffuse.contents, "Embedded texture/material missing")
+                XCTAssertEqual(asset.meshCount, 1)
+                XCTAssertTrue(asset.animationTarget.isDescendant(of: asset.root),
+                              "The GLB animation root must remain within the imported hierarchy")
+                // Verify an actually rendered mesh, not just successful JSON/texture decoding.
+                if MTLCreateSystemDefaultDevice() != nil {
+                    ShaderScene.imported = asset
+                    defer { ShaderScene.imported = nil }
+                    let rendered = ShaderScene.makeScene(shape: .imported)
+                    let empty = ShaderScene.makeScene(shape: .sphere)
+                    empty.rootNode.childNode(withName: "model", recursively: false)?.geometry = nil
+                    do {
+                        let visiblePixels = try self.render(rendered, name: "glb-visible-textured-mesh")
+                        let emptyPixels = try self.render(empty, name: "glb-empty-control")
+                        XCTAssertGreaterThan(self.difference(visiblePixels, emptyPixels), 0.002,
+                                             "GLB parsed successfully but did not display in the actual SceneKit preview")
+                    } catch {
+                        XCTFail("GLB render verification failed: \(error)")
+                    }
+                }
             case .failure(let error):
                 XCTFail("GLB import failed: \(error)")
             }
