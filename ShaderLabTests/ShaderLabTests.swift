@@ -72,9 +72,9 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(sizes.map { $0.1 }, [100, 150, 200, 400, 800])
         let source = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 200)).image { context in
             UIColor.systemRed.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 160, height: 200))
+            context.cgContext.fill(CGRect(x: 0, y: 0, width: 160, height: 200))
             UIColor.systemBlue.setFill()
-            context.fill(CGRect(x: 160, y: 0, width: 160, height: 200))
+            context.cgContext.fill(CGRect(x: 160, y: 0, width: 160, height: 200))
         }
         let cg = try XCTUnwrap(source.cgImage)
         for preset in DoomDisplayResolution.allCases {
