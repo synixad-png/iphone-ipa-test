@@ -15,13 +15,15 @@ enum PS4Controller {
         GCController.controllers().first(where: { $0.extendedGamepad != nil })?.extendedGamepad
     }
 
-    static func stick(_ stick: GCControllerDirectionPad, deadZone: CGFloat = 0.18) -> CGVector {
-        let x = CGFloat(stick.xAxis.value)
-        let y = CGFloat(stick.yAxis.value)
+    static func vector(x: CGFloat, y: CGFloat, deadZone: CGFloat = 0.18) -> CGVector {
         let magnitude = hypot(x, y)
         guard magnitude > deadZone else { return .zero }
         let adjusted = min(1, (magnitude - deadZone) / (1 - deadZone))
         return CGVector(dx: x / magnitude * adjusted, dy: y / magnitude * adjusted)
+    }
+
+    static func stick(_ stick: GCControllerDirectionPad, deadZone: CGFloat = 0.18) -> CGVector {
+        vector(x: CGFloat(stick.xAxis.value), y: CGFloat(stick.yAxis.value), deadZone: deadZone)
     }
 }
 
