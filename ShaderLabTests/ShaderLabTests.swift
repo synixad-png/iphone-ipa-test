@@ -132,11 +132,21 @@ final class ShaderLabTests: XCTestCase {
         let arcadeController = UIHostingController(rootView: AsteroidsLandscapeView(scene: arcade, close: {}))
         arcadeController.loadViewIfNeeded()
         XCTAssertNotNil(arcadeController.view)
-        let doom = DoomLandscapeView(frame: nil, move: { _ in }, aim: { _ in },
-                                     interact: { _ in }, fire: { _ in }, menu: { _ in }, close: {})
-        let doomController = UIHostingController(rootView: doom)
-        doomController.loadViewIfNeeded()
-        XCTAssertNotNil(doomController.view)
+        for mode in ["analog", "gestures"] {
+            let doom = DoomLandscapeView(frame: nil, move: { _ in }, aim: { _ in },
+                                         lookMotion: { _ in },
+                                         interact: { _ in }, fire: { _ in }, menu: { _ in }, close: {},
+                                         touchMode: .constant(mode),
+                                         lookSensitivity: .constant(1.4),
+                                         fireHorizontal: .constant(0.78),
+                                         fireVertical: .constant(0.68))
+            let doomController = UIHostingController(rootView: doom)
+            doomController.loadViewIfNeeded()
+            XCTAssertNotNil(doomController.view, "Fullscreen DOOM failed to mount for mode \(mode)")
+        }
+        // Relative-look deltas must be safe even before starting the native engine.
+        doom_bridge_look(1.25)
+        doom_bridge_look(-1.25)
     }
 
     func testDoomNativeSFXMixerAndPanning() {
