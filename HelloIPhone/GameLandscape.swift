@@ -152,6 +152,7 @@ struct DoomGestureLookZone: View {
                 .onEnded { _ in previous = .zero })
             .onDisappear { previous = .zero }
             .accessibilityLabel("Prawy obszar: płynne rozglądanie przesunięciem palca")
+    }
 }
 
 struct DoomLandscapeView: View {
