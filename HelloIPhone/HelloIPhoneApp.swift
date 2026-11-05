@@ -1597,20 +1597,27 @@ struct AsteroidsGameView: View {
 }
 
 struct MainTabsView: View {
+    @State private var selectedTab = 0
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ShaderLabView()
                 .tabItem { Label("SHADER LAB", systemImage: "cube.transparent.fill") }
+                .tag(0)
             NavigationStack {
                 AsteroidsGameView()
             }
             .tabItem { Label("ASTEROIDS", systemImage: "gamecontroller.fill") }
-            PaintView()
+            .tag(1)
+            PaintView(onExit: { selectedTab = 0 })
                 .tabItem { Label("PAINT", systemImage: "paintbrush.pointed.fill") }
+                .tag(2)
             SmileQuotesView()
                 .tabItem { Label("HUMOR", systemImage: "face.smiling.fill") }
+                .tag(3)
             DoomSharewareView()
                 .tabItem { Label("DOOM", systemImage: "bolt.shield.fill") }
+                .tag(4)
         }
         .tint(.cyan)
         .preferredColorScheme(.dark)
