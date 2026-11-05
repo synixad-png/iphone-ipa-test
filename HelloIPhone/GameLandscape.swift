@@ -193,6 +193,7 @@ struct DoomLandscapeView: View {
     @Binding var lookSensitivity: Double
     @Binding var fireHorizontal: Double
     @Binding var fireVertical: Double
+    @Binding var displayResolution: Int
     @State private var showControlSettings = false
 
     var body: some View {
@@ -264,6 +265,15 @@ struct DoomLandscapeView: View {
                             Button("GOTOWE") { showControlSettings = false }
                                 .buttonStyle(.borderedProminent)
                         }
+                        Text("ROZDZIELCZOŚĆ OBRAZU").font(.caption.bold())
+                        Picker("Rozdzielczość obrazu", selection: $displayResolution) {
+                            ForEach(DoomDisplayResolution.allCases) { preset in
+                                Text(preset.title).tag(preset.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        Text("Silnik renderuje 320 × 200. Pozostałe wartości zmieniają skalowanie klatki, nie rzeczywistą rozdzielczość silnika.")
+                            .font(.caption)
                         Picker("Tryb", selection: $touchMode) {
                             Text("Analogi").tag("analog")
                             Text("Gesty bez analogów").tag("gestures")
