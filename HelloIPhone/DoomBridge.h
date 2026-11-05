@@ -10,6 +10,8 @@ int doom_bridge_start(const char *wad_path);
 int doom_bridge_status(void);
 int doom_bridge_copy(uint32_t *destination, int maximum_pixels);
 void doom_bridge_key(int code, int pressed);
+// Relative finger motion delivered as native Doom mouse events.
+void doom_bridge_look(float horizontal_delta);
 void doom_bridge_pause(int paused);
 void doom_audio_set_paused(int paused);
 void doom_audio_set_volume(float volume);
