@@ -1,6 +1,9 @@
 // Doom engine platform adapter. The game logic is provided by GPL-2.0 doomgeneric.
 #include "DoomBridge.h"
 #include "doomgeneric.h"
+#include "d_event.h"
+#include "d_main.h"
+#include <math.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -17,6 +20,7 @@ static uint32_t frames[FRAME_PIXELS];
 static int has_frame = 0, state = 0, paused = 0;
 static unsigned short input_queue[KEY_CAPACITY];
 static unsigned int read_index = 0, write_index = 0;
+static float pending_mouse_horizontal = 0;
 static char wad_filename[4096];
 static pthread_t engine_thread;
 
@@ -159,6 +163,18 @@ static void *doom_thread(void *ignored) {
         int should_pause = paused;
         pthread_mutex_unlock(&state_mutex);
         if (should_pause) { usleep(25000); continue; }
+        float motion = 0;
+        pthread_mutex_lock(&state_mutex);
+        motion = pending_mouse_horizontal;
+        if (motion >= 1.0f || motion <= -1.0f)
+            pending_mouse_horizontal = 0;
+        pthread_mutex_unlock(&state_mutex);
+        if (motion >= 1.0f || motion <= -1.0f) {
+            // Post on the engine thread, never from the UI thread.
+            event_t event = { .type = ev_mouse, .data1 = 0,
+                              .data2 = (int)motion, .data3 = 0 };
+            D_PostEvent(&event);
+        }
         doomgeneric_Tick();
     }
     return NULL;
@@ -205,6 +221,14 @@ void doom_bridge_key(int code, int pressed) {
         read_index++;
     input_queue[write_index % KEY_CAPACITY] = (unsigned short)(((pressed ? 1 : 0) << 8) | code);
     write_index++;
+    pthread_mutex_unlock(&state_mutex);
+}
+void doom_bridge_look(float horizontal_delta) {
+    if (!isfinite(horizontal_delta)) return;
+    pthread_mutex_lock(&state_mutex);
+    pending_mouse_horizontal += horizontal_delta * 3.0f;
+    if (pending_mouse_horizontal > 250.0f) pending_mouse_horizontal = 250.0f;
+    if (pending_mouse_horizontal < -250.0f) pending_mouse_horizontal = -250.0f;
     pthread_mutex_unlock(&state_mutex);
 }
 void doom_bridge_pause(int value) {
