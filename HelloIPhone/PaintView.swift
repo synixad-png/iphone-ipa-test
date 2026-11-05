@@ -231,137 +231,73 @@ struct PaintShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ viewController: UIActivityViewController, context: Context) {}
 }
 
+// Workspace layout: the canvas fills the screen while tools stay on the right.
+// No ScrollView or drag gesture is placed above the drawing surface.
 struct PaintView: View {
     @StateObject private var document = PaintDocument()
     @State private var showClearConfirmation = false
     @State private var exportImage: UIImage?
     @State private var showShare = false
-    @State private var showTools = false
-    @State private var canvasSize = CGSize(width: 600, height: 450)
 
-    // Only the tool palette scrolls; the drawing canvas never sits inside a ScrollView.
-    // This prevents a finger stroke from panning the entire screen.
     var body: some View {
         GeometryReader { layout in
-            let wide = layout.size.width > 760
-            ZStack {
-                LabStyle.background.ignoresSafeArea()
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
+            let compact = layout.size.width < 600
+            let toolsWidth: CGFloat = compact ? 98 : min(236, layout.size.width * 0.27)
+
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
                         Image(systemName: "paintbrush.pointed.fill")
                             .foregroundStyle(LabStyle.accent)
-                            .frame(width: 44, height: 44)
-                            .background(LabStyle.accent.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 12))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("PAINT")
-                                .font(.system(size: wide ? 26 : 21,
-                                              weight: .bold, design: .rounded))
-                            Text("Rysuj palcem lub Apple Pencil")
-                                .font(.caption)
-                                .foregroundStyle(LabStyle.muted)
-                        }
-                        Spacer(minLength: 0)
-                        Button {
-                            exportImage = PaintDocument.render(
-                                document.strokes, size: CGSize(width: 1400, height: 1000))
-                            showShare = true
-                        } label: {
-                            Label("Zapisz", systemImage: "square.and.arrow.up")
-                                .font(.subheadline.bold())
-                        }
-                        .buttonStyle(LabPrimaryButtonStyle())
-                        .fixedSize(horizontal: true, vertical: false)
-                        .accessibilityLabel("Zapisz lub udostępnij rysunek")
+                        Text("PAINT")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                        Spacer(minLength: 2)
+                        Text("\(document.strokes.count)")
+                            .monospacedDigit()
+                            .font(.caption)
+                            .foregroundStyle(LabStyle.muted)
+                        Image(systemName: "pencil.line")
+                            .font(.caption)
+                            .foregroundStyle(LabStyle.muted)
                     }
+                    .padding(.horizontal, 12)
+                    .frame(height: 35)
+                    .background(LabStyle.panel)
 
-                    if wide {
-                        HStack(alignment: .top, spacing: 14) {
-                            drawingPanel
-                                .frame(maxWidth: .infinity, alignment: .top)
-                            toolsPanel
-                                .frame(width: min(300, layout.size.width * 0.32),
-                                       alignment: .top)
-                        }
-                        .frame(maxHeight: .infinity, alignment: .top)
-                    } else {
-                        drawingPanel
-                            .fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: 8) {
-                            Button {
-                                document.isEraser = false
-                            } label: {
-                                Label("Pędzel", systemImage: "pencil.tip")
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
-                            .buttonStyle(LabChipStyle(active: !document.isEraser))
-                            Button {
-                                document.isEraser = true
-                            } label: {
-                                Label("Gumka", systemImage: "eraser.fill")
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
-                            .buttonStyle(LabChipStyle(active: document.isEraser))
-                            Button {
-                                showTools = true
-                            } label: {
-                                Label("Kolory", systemImage: "paintpalette.fill")
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
-                            .buttonStyle(LabPrimaryButtonStyle())
-                        }
-                        .font(.system(size: 11, weight: .semibold))
-                        HStack(spacing: 9) {
-                            Button {
-                                document.undo()
-                            } label: {
-                                Label("Cofnij", systemImage: "arrow.uturn.backward")
-                                    .frame(maxWidth: .infinity, minHeight: 39)
-                            }
-                            .disabled(!document.canUndo)
-                            Button {
-                                document.redo()
-                            } label: {
-                                Label("Ponów", systemImage: "arrow.uturn.forward")
-                                    .frame(maxWidth: .infinity, minHeight: 39)
-                            }
-                            .disabled(!document.canRedo)
-                        }
-                        .buttonStyle(LabChipStyle(active: false))
-                        .font(.system(size: 11, weight: .semibold))
-                        Spacer(minLength: 0)
+                    GeometryReader { canvas in
+                        PaintCanvasRepresentable(document: document)
+                            .frame(width: canvas.size.width, height: canvas.size.height)
+                            .background(Color.white)
+                            .accessibilityLabel("Pełnoekranowe płótno Paint do rysowania palcem lub Apple Pencil")
                     }
+                    .background(.white)
+                    .overlay(Rectangle().strokeBorder(LabStyle.border, lineWidth: 1))
                 }
-                .padding(.horizontal, wide ? 24 : 12)
-                .padding(.top, 12)
-                .padding(.bottom, 4)
-                .frame(maxWidth: 1260, maxHeight: .infinity, alignment: .top)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Rectangle()
+                    .fill(LabStyle.border)
+                    .frame(width: 1)
+
+                ScrollView(.vertical) {
+                    toolSidebar(compact: compact)
+                        .padding(.horizontal, compact ? 6 : 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .top)
+                }
+                .scrollIndicators(.hidden)
+                .frame(width: toolsWidth, height: layout.size.height)
+                .background(LabStyle.panel)
+                .accessibilityLabel("Panel narzędzi Paint po prawej stronie")
             }
+            .frame(width: layout.size.width, height: layout.size.height)
+            .background(LabStyle.background)
         }
+        .toolbar(.hidden, for: .tabBar)
         .foregroundStyle(.white)
         .tint(LabStyle.accent)
-        .sheet(isPresented: $showTools) {
-            NavigationStack {
-                ScrollView {
-                    toolsPanel
-                        .padding(14)
-                }
-                .background(LabStyle.background)
-                .navigationTitle("Narzędzia PAINT")
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Gotowe") { showTools = false }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
-            .preferredColorScheme(.dark)
-        }
         .sheet(isPresented: $showShare) {
-            if let exportImage {
-                PaintShareSheet(image: exportImage)
-            }
+            if let exportImage { PaintShareSheet(image: exportImage) }
         }
         .confirmationDialog("Wyczyścić cały rysunek?", isPresented: $showClearConfirmation,
                             titleVisibility: .visible) {
@@ -370,44 +306,40 @@ struct PaintView: View {
         }
     }
 
-    private var drawingPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                LabSectionTitle(title: "PŁÓTNO", symbol: "rectangle.on.rectangle")
-                Spacer()
-                Text("\(document.strokes.count) kresek")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(LabStyle.muted)
-            }
-            GeometryReader { geometry in
-                PaintCanvasRepresentable(document: document)
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .background(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .onAppear { canvasSize = geometry.size }
-                    .onChange(of: geometry.size) { canvasSize = $0 }
-                    .accessibilityLabel("Białe płótno do rysowania palcem lub Apple Pencil")
-            }
-            .aspectRatio(4.0 / 3.0, contentMode: .fit)
-            .background(.white, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(LabStyle.border, lineWidth: 1))
-        }
-        .labPanel()
-    }
+    @ViewBuilder
+    private func toolSidebar(compact: Bool) -> some View {
+        VStack(alignment: .center, spacing: compact ? 12 : 16) {
+            Text("NARZĘDZIA")
+                .font(.system(size: compact ? 9 : 12, weight: .bold))
+                .foregroundStyle(LabStyle.accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
-    private var toolsPanel: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            LabSectionTitle(title: "NARZĘDZIA", symbol: "paintbrush")
-            HStack(spacing: 8) {
-                toolButton("Pędzel", symbol: "pencil.tip", active: !document.isEraser) {
+            if compact {
+                toolButton("Pędzel", symbol: "pencil.tip", active: !document.isEraser, compact: true) {
                     document.isEraser = false
                 }
-                toolButton("Gumka", symbol: "eraser.fill", active: document.isEraser) {
+                toolButton("Gumka", symbol: "eraser.fill", active: document.isEraser, compact: true) {
                     document.isEraser = true
                 }
+            } else {
+                HStack(spacing: 6) {
+                    toolButton("Pędzel", symbol: "pencil.tip", active: !document.isEraser, compact: false) {
+                        document.isEraser = false
+                    }
+                    toolButton("Gumka", symbol: "eraser.fill", active: document.isEraser, compact: false) {
+                        document.isEraser = true
+                    }
+                }
             }
-            Text("KOLORY").font(.caption.bold()).foregroundStyle(LabStyle.muted)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 41), spacing: 8)], spacing: 8) {
+
+            Divider().overlay(LabStyle.border)
+            Text("KOLORY")
+                .font(.system(size: compact ? 9 : 11, weight: .bold))
+                .foregroundStyle(LabStyle.muted)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5),
+                                     count: compact ? 2 : 4), spacing: 7) {
                 ForEach(PaintPalette.colors.indices, id: \.self) { index in
                     Button {
                         document.selectedColor = index
@@ -415,61 +347,109 @@ struct PaintView: View {
                     } label: {
                         Circle()
                             .fill(Color(uiColor: PaintPalette.colors[index]))
-                            .frame(width: 29, height: 29)
+                            .frame(width: compact ? 28 : 32, height: compact ? 28 : 32)
                             .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
-                            .padding(5)
+                            .padding(3)
                             .overlay(Circle().strokeBorder(
-                                document.selectedColor == index && !document.isEraser ?
-                                    LabStyle.accent : .clear, lineWidth: 2))
+                                document.selectedColor == index && !document.isEraser
+                                    ? LabStyle.accent : .clear, lineWidth: 2))
                     }
+                    .frame(maxWidth: .infinity)
                     .accessibilityLabel(PaintPalette.names[index])
                 }
             }
-            HStack {
-                Text("Grubość pędzla")
-                Spacer()
-                Text("\(Int(document.thickness)) pt")
+
+            Divider().overlay(LabStyle.border)
+            VStack(spacing: 5) {
+                Text(compact ? "ROZMIAR" : "GRUBOŚĆ PĘDZLA")
+                    .font(.system(size: compact ? 9 : 11, weight: .bold))
+                    .foregroundStyle(LabStyle.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("\(Int(document.thickness)) px")
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(LabStyle.accent)
-                    .monospacedDigit()
+                Slider(value: $document.thickness, in: 2...32, step: 1)
+                    .accessibilityLabel("Grubość pędzla")
             }
-            .font(.subheadline)
-            Slider(value: $document.thickness, in: 2...32, step: 1)
-                .tint(LabStyle.accent)
-            HStack(spacing: 8) {
-                toolButton("Cofnij", symbol: "arrow.uturn.backward",
-                           active: false, enabled: document.canUndo) {
+
+            Divider().overlay(LabStyle.border)
+            if compact {
+                toolButton("Cofnij", symbol: "arrow.uturn.backward", active: false,
+                           compact: true, enabled: document.canUndo) {
                     document.undo()
                 }
-                toolButton("Ponów", symbol: "arrow.uturn.forward",
-                           active: false, enabled: document.canRedo) {
+                toolButton("Ponów", symbol: "arrow.uturn.forward", active: false,
+                           compact: true, enabled: document.canRedo) {
                     document.redo()
                 }
+            } else {
+                HStack(spacing: 6) {
+                    toolButton("Cofnij", symbol: "arrow.uturn.backward", active: false,
+                               compact: false, enabled: document.canUndo) {
+                        document.undo()
+                    }
+                    toolButton("Ponów", symbol: "arrow.uturn.forward", active: false,
+                               compact: false, enabled: document.canRedo) {
+                        document.redo()
+                    }
+                }
             }
-            Button(role: .destructive) {
+
+            toolButton("Wyczyść", symbol: "trash", active: false,
+                       compact: compact, enabled: document.canUndo) {
                 showClearConfirmation = true
-            } label: {
-                Label("Wyczyść cały rysunek", systemImage: "trash")
-                    .font(.subheadline.weight(.medium))
-                    .frame(maxWidth: .infinity, minHeight: 42)
             }
-            .disabled(!document.canUndo)
-            .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-            .foregroundStyle(.red)
-            .accessibilityLabel("Wyczyść płótno")
+
+            Button {
+                // Keep the export's pixel dimensions stable between screen orientations.
+                exportImage = PaintDocument.render(
+                    document.strokes, size: CGSize(width: 1400, height: 1000))
+                showShare = true
+            } label: {
+                if compact {
+                    VStack(spacing: 5) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 19, weight: .semibold))
+                        Text("ZAPISZ")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                } else {
+                    Label("Zapisz / udostępnij", systemImage: "square.and.arrow.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+            }
+            .buttonStyle(LabPrimaryButtonStyle())
+            .accessibilityLabel("Zapisz lub udostępnij obraz")
         }
-        .labPanel()
     }
 
-    private func toolButton(_ title: String, symbol: String,
-                            active: Bool, enabled: Bool = true,
+    private func toolButton(_ title: String, symbol: String, active: Bool,
+                            compact: Bool, enabled: Bool = true,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(maxWidth: .infinity, minHeight: 43)
+            if compact {
+                VStack(spacing: 5) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 19, weight: .medium))
+                    Text(title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, minHeight: 52)
+            } else {
+                Label(title, systemImage: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+            }
         }
         .buttonStyle(LabChipStyle(active: active))
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.45)
+        .accessibilityLabel(title)
     }
 }
