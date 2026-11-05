@@ -691,7 +691,7 @@ struct ShaderLabView: View {
             if activePanel == 1 {
             VStack(alignment: .leading, spacing: 12) {
                 LabSectionTitle(title: "WYGLĄD POWIERZCHNI", symbol: "circle.hexagongrid")
-                if shape == .imported {
+                if shape == .imported || shape == .ship {
                     Text("Materiały importowanego GLB pozostają oryginalne. Zmieniaj oświetlenie w panelu poniżej.")
                         .font(.caption).foregroundStyle(LabStyle.muted)
                 } else {
