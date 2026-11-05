@@ -19,6 +19,10 @@ struct DoomSharewareView: View {
     @State private var moveAxis = CGVector.zero
     @State private var aimAxis = CGVector.zero
     @State private var analogPressed = Set<Int32>()
+    @AppStorage("doom.touch.mode") private var touchMode = "analog"
+    @AppStorage("doom.touch.lookSensitivity") private var lookSensitivity: Double = 1.4
+    @AppStorage("doom.touch.fireHorizontal") private var fireHorizontal: Double = 0.78
+    @AppStorage("doom.touch.fireVertical") private var fireVertical: Double = 0.68
     @AppStorage("doom.sfx.enabled") private var effectsEnabled = true
     @AppStorage("doom.sfx.volume") private var effectsVolume: Double = 0.85
 
@@ -113,7 +117,11 @@ struct DoomSharewareView: View {
                               interact: { pressed in doom_bridge_key(0xa2, pressed ? 1 : 0) },
                               fire: { pressed in doom_bridge_key(0xa3, pressed ? 1 : 0) },
                               menu: { pressed in doom_bridge_key(27, pressed ? 1 : 0) },
-                              close: { fullScreen = false })
+                              close: { fullScreen = false },
+                              touchMode: $touchMode,
+                              lookSensitivity: $lookSensitivity,
+                              fireHorizontal: $fireHorizontal,
+                              fireVertical: $fireVertical)
                 .onAppear { doom_bridge_pause(0) }
         }
         .fileImporter(isPresented: $importPresented,
@@ -152,6 +160,7 @@ struct DoomSharewareView: View {
         .onChange(of: effectsEnabled) { _ in
             doom_audio_set_volume(effectsEnabled ? Float(effectsVolume) : 0)
         }
+        .onChange(of: touchMode) { _ in releaseAllKeys() }
         .onDisappear {
             releaseAllKeys()
             doom_bridge_pause(1)
@@ -213,6 +222,7 @@ struct DoomSharewareView: View {
             }
             .aspectRatio(4.0 / 3.0, contentMode: .fit)
             .overlay(alignment: .bottom) {
+                if touchMode == "analog" {
                 HStack(alignment: .bottom) {
                     GameJoystick(title: "RUCH", tint: .cyan, diameter: 96) {
                         updateAxis($0, movement: true)
@@ -228,6 +238,18 @@ struct DoomSharewareView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 7)
+                } else {
+                    HStack {
+                        Text("GESTY: LEWA — RUCH · PRAWA — OBRÓT")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Spacer()
+                        DoomPressControl(title: "OGIEŃ", symbol: "scope") { pressed in
+                            doom_bridge_key(0xa3, pressed ? 1 : 0)
+                        }
+                    }
+                    .padding(8)
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(LabStyle.border))
@@ -242,8 +264,28 @@ struct DoomSharewareView: View {
     private var controlsPanel: some View {
         VStack(alignment: .leading, spacing: 13) {
             LabSectionTitle(title: "STEROWANIE DOTYKOWE", symbol: "hand.draw")
-            Text("Lewy analog: poruszanie i kroki w bok. Prawy: obrót. Przycisk OGIEŃ jest bezpośrednio na obrazie gry.")
+            Picker("Tryb sterowania", selection: $touchMode) {
+                Text("Widoczne analogi").tag("analog")
+                Text("Gesty bez analogów").tag("gestures")
+            }
+            .pickerStyle(.segmented)
+            Text(touchMode == "gestures"
+                 ? "W pełnym ekranie: przesuń palcem po lewej stronie, aby chodzić i robić kroki w bok. Po prawej stronie przesuwaj palcem, aby się rozglądać. Przycisk OGIEŃ można przesuwać w ustawieniach."
+                 : "Lewy analog: poruszanie i kroki w bok. Prawy: obrót. Przycisk OGIEŃ jest bezpośrednio na obrazie gry.")
                 .font(.caption).foregroundStyle(LabStyle.muted)
+            if touchMode == "gestures" {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("CZUŁOŚĆ ROZGLĄDANIA: \(lookSensitivity, specifier: "%.1f")×")
+                        .font(.caption.bold())
+                    Slider(value: $lookSensitivity, in: 0.5...3.0, step: 0.1)
+                    Text("PRZYCISK OGIEŃ · POZIOM")
+                        .font(.caption.bold())
+                    Slider(value: $fireHorizontal, in: 0...1)
+                    Text("PRZYCISK OGIEŃ · WYSOKOŚĆ")
+                        .font(.caption.bold())
+                    Slider(value: $fireVertical, in: 0...1)
+                }
+            }
             HStack(spacing: 8) {
                 hold("UŻYJ", "hand.tap", key: 0xa2, color: .orange)
                 hold("MENU", "line.3.horizontal", key: 27)
