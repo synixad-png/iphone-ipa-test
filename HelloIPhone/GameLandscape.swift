@@ -106,6 +106,68 @@ struct AsteroidsLandscapeView: View {
     }
 }
 
+// Input-only surfaces: no analogue graphics or synthetic center location.
+struct DoomGestureMovementZone: View {
+    let onVector: (CGVector) -> Void
+    @State private var firstPoint: CGPoint?
+
+    var body: some View {
+        GeometryReader { geometry in
+            Color.clear.contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        if firstPoint == nil { firstPoint = value.startLocation }
+                        let origin = firstPoint ?? value.startLocation
+                        let radius = max(36, min(76, geometry.size.height * 0.26))
+                        let dx = (value.location.x - origin.x) / radius
+                        let dy = (origin.y - value.location.y) / radius
+                        func filtered(_ v: CGFloat) -> CGFloat {
+                            let magnitude = min(1, abs(v))
+                            return abs(v) < 0.12 ? 0 : (v > 0 ? 1 : -1) * (magnitude - 0.12) / 0.88
+                        }
+                        onVector(CGVector(dx: filtered(dx), dy: filtered(dy)))
+                    }
+                    .onEnded { _ in firstPoint = nil; onVector(.zero) })
+        }
+        .accessibilityLabel("Lewy obszar: ruch i krok w bok")
+    }
+}
+
+struct DoomGestureLookZone: View {
+    let sensitivity: Double
+    let onVector: (CGVector) -> Void
+    @State private var previous = CGSize.zero
+    @State private var lastMotion = Date.distantPast
+    private let clock = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Color.clear.contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { value in
+                    let delta = value.translation.width - previous.width
+                    previous = value.translation
+                    // Turn only while the finger moves; a stationary finger never
+                    // holds a virtual stick at maximum deflection.
+                    let threshold = CGFloat(1.8 / max(0.5, sensitivity))
+                    if abs(delta) >= threshold {
+                        onVector(CGVector(dx: delta > 0 ? 1 : -1, dy: 0))
+                        lastMotion = Date()
+                    }
+                }
+                .onEnded { _ in
+                    previous = .zero
+                    lastMotion = .distantPast
+                    onVector(.zero)
+                })
+            .onReceive(clock) { now in
+                if now.timeIntervalSince(lastMotion) > 0.075 && lastMotion != .distantPast {
+                    lastMotion = .distantPast
+                    onVector(.zero)
+                }
+            }
+            .accessibilityLabel("Prawy obszar: rozglądanie się przesunięciem palca")
+}
+
 struct DoomLandscapeView: View {
     let frame: UIImage?
     let move: (CGVector) -> Void
@@ -114,6 +176,11 @@ struct DoomLandscapeView: View {
     let fire: (Bool) -> Void
     let menu: (Bool) -> Void
     let close: () -> Void
+    @Binding var touchMode: String
+    @Binding var lookSensitivity: Double
+    @Binding var fireHorizontal: Double
+    @Binding var fireVertical: Double
+    @State private var showControlSettings = false
 
     var body: some View {
         GeometryReader { g in
@@ -128,34 +195,87 @@ struct DoomLandscapeView: View {
                 } else {
                     Text("DOOM · ŁADOWANIE").foregroundStyle(.orange)
                 }
+                if touchMode == "gestures" {
+                    HStack(spacing: 0) {
+                        DoomGestureMovementZone(onVector: move)
+                        DoomGestureLookZone(sensitivity: lookSensitivity, onVector: aim)
+                    }
+                    .ignoresSafeArea()
+                    DoomPressControl(title: "OGIEŃ", symbol: "scope", action: fire)
+                        .position(x: g.size.width * (0.56 + fireHorizontal * 0.38),
+                                  y: g.size.height * (0.20 + fireVertical * 0.65))
+                    DoomPressControl(title: "UŻYJ", symbol: "hand.tap", action: interact)
+                        .position(x: g.size.width * 0.82, y: g.size.height * 0.83)
+                }
                 VStack {
-                    HStack {
+                    HStack(spacing: 10) {
                         Text("DOOM SHAREWARE").font(.system(.caption, design: .monospaced).bold())
                             .foregroundStyle(.orange)
                         Spacer()
+                        Button {
+                            move(.zero); aim(.zero); fire(false); interact(false)
+                            showControlSettings = true
+                        } label: {
+                            Label("STEROWANIE", systemImage: "slider.horizontal.3")
+                                .font(.caption.bold())
+                        }
+                        .buttonStyle(.bordered)
                         DoomPressControl(title: "MENU", symbol: "line.3.horizontal", action: menu)
                         Button("WYJDŹ", action: close).buttonStyle(.borderedProminent)
                     }
                     Spacer()
-                    HStack(alignment: .bottom) {
-                        GameJoystick(title: "RUCH", tint: .cyan, diameter: d, onVector: move)
-                        Spacer()
-                        VStack(spacing: 8) {
-                            DoomPressControl(title: "OGIEŃ", symbol: "scope", action: fire)
-                            DoomPressControl(title: "UŻYJ", symbol: "hand.tap", action: interact)
+                    if touchMode != "gestures" {
+                        HStack(alignment: .bottom) {
+                            GameJoystick(title: "RUCH", tint: .cyan, diameter: d, onVector: move)
+                            Spacer()
+                            VStack(spacing: 8) {
+                                DoomPressControl(title: "OGIEŃ", symbol: "scope", action: fire)
+                                DoomPressControl(title: "UŻYJ", symbol: "hand.tap", action: interact)
+                            }
+                            .padding(.bottom, 12)
+                            GameJoystick(title: "OBRÓT", tint: .red, diameter: d, onVector: aim)
                         }
-                        .padding(.bottom, 12)
-                        GameJoystick(title: "OBRÓT", tint: .red, diameter: d, onVector: aim)
                     }
                 }
                 .padding(.horizontal, max(16, g.safeAreaInsets.leading + 10))
                 .padding(.top, 8)
                 .padding(.bottom, max(10, g.safeAreaInsets.bottom))
+                if showControlSettings {
+                    Color.black.opacity(0.76).ignoresSafeArea()
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Text("STEROWANIE DOOM").font(.headline)
+                            Spacer()
+                            Button("GOTOWE") { showControlSettings = false }
+                                .buttonStyle(.borderedProminent)
+                        }
+                        Picker("Tryb", selection: $touchMode) {
+                            Text("Analogi").tag("analog")
+                            Text("Gesty bez analogów").tag("gestures")
+                        }
+                        .pickerStyle(.segmented)
+                        if touchMode == "gestures" {
+                            Text("Lewa połowa: chodzenie i strafing. Prawa: rozglądanie ruchem palca.")
+                                .font(.caption)
+                            Text("Czułość rozglądania")
+                            Slider(value: $lookSensitivity, in: 0.5...3.0, step: 0.1)
+                            Text("Pozycja OGIEŃ — prawo / lewo")
+                            Slider(value: $fireHorizontal, in: 0...1)
+                            Text("Pozycja OGIEŃ — góra / dół")
+                            Slider(value: $fireVertical, in: 0...1)
+                        }
+                    }
+                    .padding(20)
+                    .frame(maxWidth: 440)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                    .padding(18)
+                }
             }
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear { GameLandscapeMode.set(true) }
+        .onChange(of: touchMode) { _ in move(.zero); aim(.zero); fire(false); interact(false) }
         .onDisappear {
             move(.zero); aim(.zero); fire(false); interact(false); menu(false)
             GameLandscapeMode.set(false)
