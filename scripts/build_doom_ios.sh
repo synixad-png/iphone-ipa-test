@@ -21,6 +21,26 @@ SDK="${1:-iphoneos}"
 BUILD="$ROOT/BuildGenerated"
 SRC="$ENGINE/doomgeneric"
 mkdir -p "$BUILD"
+# Genuine higher-resolution software renderer. Original engine is 320x200.
+# Doomgeneric uses compile-time SCREENWIDTH / SCREENHEIGHT throughout its
+# rasterizer, render lookup arrays and clipping; update both engine and
+# framebuffer definitions together instead of only scaling a 320x200 output.
+# The checkout is reproducibly pinned; assert original text before patching.
+python3 - "$SRC/i_video.h" <<'PY'
+import pathlib, sys
+header = pathlib.Path(sys.argv[1])
+source = header.read_text()
+for before, after in [
+    ("#define SCREENWIDTH  320", "#define SCREENWIDTH  640"),
+    ("#define SCREENHEIGHT 200", "#define SCREENHEIGHT 400"),
+]:
+    if before in source:
+        source = source.replace(before, after, 1)
+    elif after not in source:
+        raise RuntimeError("Unexpected pinned Doom engine screen definition: " + before)
+header.write_text(source)
+print("DOOM_NATIVE_RENDERER=640x400")
+PY
 OBJECTS=$(sed -n '/^SRC_DOOM = /s/^SRC_DOOM = //p' "$SRC/Makefile")
 SDKROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
 if [[ "$SDK" == "iphoneos" ]]; then ARCHS=(arm64); else ARCHS=(arm64 x86_64); fi
@@ -49,11 +69,11 @@ for ARCH in "${ARCHS[@]}"; do
     fi
     xcrun --sdk "$SDK" clang -target "$TARGET" -isysroot "$SDKROOT" \
       -std=gnu11 -O2 -fcommon -w -DFEATURE_SOUND=1 -DNORMALUNIX -D_DEFAULT_SOURCE \
-      -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 \
+      -DDOOMGENERIC_RESX=640 -DDOOMGENERIC_RESY=400 \
       -I"$SRC" -c "$INPUT" -o "$DIR/$name.o"
   done
   xcrun --sdk "$SDK" clang -target "$TARGET" -isysroot "$SDKROOT" \
-    -std=gnu11 -O2 -fcommon -w -DDOOMGENERIC_RESX=320 -DDOOMGENERIC_RESY=200 \
+    -std=gnu11 -O2 -fcommon -w -DDOOMGENERIC_RESX=640 -DDOOMGENERIC_RESY=400 \
     -I"$SRC" -I"$ROOT/HelloIPhone" \
     -c "$ROOT/HelloIPhone/DoomBridge.c" -o "$DIR/DoomBridge.o"
   xcrun --sdk "$SDK" clang -target "$TARGET" -isysroot "$SDKROOT" \
