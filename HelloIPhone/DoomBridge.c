@@ -206,6 +206,9 @@ int doom_bridge_status(void) {
     pthread_mutex_unlock(&state_mutex);
     return result;
 }
+int doom_bridge_width(void) { return DOOMGENERIC_RESX; }
+int doom_bridge_height(void) { return DOOMGENERIC_RESY; }
+
 int doom_bridge_copy(uint32_t *destination, int maximum_pixels) {
     if (!destination || maximum_pixels < FRAME_PIXELS) return 0;
     pthread_mutex_lock(&state_mutex);
