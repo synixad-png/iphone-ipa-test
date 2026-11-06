@@ -480,10 +480,11 @@ struct DoomSharewareView: View {
     private func updateAxis(_ value: CGVector, movement: Bool) {
         if movement { moveAxis = value } else { aimAxis = value }
         var wanted = Set<Int32>()
-        if moveAxis.dy > 0.23 { wanted.insert(0xad) }
-        if moveAxis.dy < -0.23 { wanted.insert(0xaf) }
-        if moveAxis.dx < -0.23 { wanted.insert(0xa0) }
-        if moveAxis.dx > 0.23 { wanted.insert(0xa1) }
+        let threshold: CGFloat = touchMode == "gestures" ? 0.04 : 0.23
+        if moveAxis.dy > threshold { wanted.insert(0xad) }
+        if moveAxis.dy < -threshold { wanted.insert(0xaf) }
+        if moveAxis.dx < -threshold { wanted.insert(0xa0) }
+        if moveAxis.dx > threshold { wanted.insert(0xa1) }
         if aimAxis.dx < -0.23 { wanted.insert(0xac) }
         if aimAxis.dx > 0.23 { wanted.insert(0xae) }
         for key in analogPressed.subtracting(wanted) where !controllerPressed.contains(key) {
