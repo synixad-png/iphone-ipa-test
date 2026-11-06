@@ -286,7 +286,7 @@ struct DoomLandscapeView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        Text("Silnik renderuje 320 × 200. Pozostałe wartości zmieniają skalowanie klatki, nie rzeczywistą rozdzielczość silnika.")
+                        Text("Natywny renderer 640 × 400 poprawia szczegółowość świata. Niższe tryby redukują obraz; 1280 × 800 tylko go powiększa.")
                             .font(.caption)
                         Picker("Tryb", selection: $touchMode) {
                             Text("Analogi").tag("analog")
