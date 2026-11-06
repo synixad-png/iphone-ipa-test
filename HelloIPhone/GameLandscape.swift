@@ -286,7 +286,7 @@ struct DoomLandscapeView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        Text("Natywny renderer 640 × 400 poprawia szczegółowość świata. Niższe tryby redukują obraz; 1280 × 800 tylko go powiększa.")
+                        Text("Tryb stabilny: DOOM renderuje w 320 × 200. Inne rozmiary wyjściowe są tylko skalowaniem obrazu.")
                             .font(.caption)
                         Picker("Tryb", selection: $touchMode) {
                             Text("Analogi").tag("analog")
