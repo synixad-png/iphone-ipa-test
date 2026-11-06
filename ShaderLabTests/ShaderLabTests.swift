@@ -186,7 +186,8 @@ final class ShaderLabTests: XCTestCase {
                                          touchMode: .constant(mode),
                                          lookSensitivity: .constant(1.4),
                                          fireHorizontal: .constant(0.78),
-                                         fireVertical: .constant(0.68))
+                                         fireVertical: .constant(0.68),
+                                         displayResolution: .constant(DoomDisplayResolution.high.rawValue))
             let doomController = UIHostingController(rootView: doom)
             doomController.loadViewIfNeeded()
             XCTAssertNotNil(doomController.view, "Fullscreen DOOM failed to mount for mode \(mode)")
