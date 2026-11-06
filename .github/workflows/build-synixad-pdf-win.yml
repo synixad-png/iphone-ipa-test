@@ -1,0 +1,54 @@
+name: Build SynixAd PDF v5 (Windows EXE)
+on:
+  push:
+    branches:
+      - synixad-pdf-v5-win-build
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Python 3.11 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Unpack supplied v5 project
+        shell: pwsh
+        run: |
+          python -c "import tarfile; tarfile.open('source/synixad_v5_src.tar.xz', 'r:xz').extractall('.', filter='data')"
+      - name: Install dependencies for one-file EXE
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller pymupdf pillow pdf2docx python-docx pywin32
+      - name: Verify source syntax
+        shell: pwsh
+        run: |
+          python -m compileall -q SynixAd_PDF_Uniwersalny_v5
+      - name: Package Win64 executable
+        shell: pwsh
+        run: |
+          Set-Location SynixAd_PDF_Uniwersalny_v5
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SynixAd_PDF_Uniwersalny_v5 --collect-all fitz --collect-all pymupdf --collect-all pdf2docx --collect-all cv2 --hidden-import win32com.client --hidden-import pythoncom --hidden-import pywintypes SynixAd_PDF.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate EXE and calculate hash
+        shell: pwsh
+        run: |
+          $exe = 'SynixAd_PDF_Uniwersalny_v5/dist/SynixAd_PDF_Uniwersalny_v5.exe'
+          if (!(Test-Path $exe)) { throw "EXE not created" }
+          $f = Get-Item $exe
+          if ($f.Length -lt 1000000) { throw "EXE too small" }
+          Write-Host "SIZE: $($f.Length) bytes"
+          Get-FileHash -Path $exe -Algorithm SHA256 | Format-List
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: SynixAd_PDF_v5_Windows_EXE
+          path: SynixAd_PDF_Uniwersalny_v5/dist/SynixAd_PDF_Uniwersalny_v5.exe
+          if-no-files-found: error
+          retention-days: 14
