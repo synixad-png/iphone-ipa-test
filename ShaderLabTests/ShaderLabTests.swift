@@ -88,11 +88,14 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(sizes.map { $0.1 }, [100, 150, 200, 400, 800])
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let source = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 200), format: format).image { context in
+        // The native source is now 640x400. The 640x400 preset deliberately
+        // returns its input unchanged, so using a legacy 320x200 fixture here
+        // would test the wrong contract and fail at the native preset.
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 400), format: format).image { context in
             UIColor.systemRed.setFill()
-            context.cgContext.fill(CGRect(x: 0, y: 0, width: 160, height: 200))
+            context.cgContext.fill(CGRect(x: 0, y: 0, width: 320, height: 400))
             UIColor.systemBlue.setFill()
-            context.cgContext.fill(CGRect(x: 160, y: 0, width: 160, height: 200))
+            context.cgContext.fill(CGRect(x: 320, y: 0, width: 320, height: 400))
         }
         let cg = try XCTUnwrap(source.cgImage)
         for preset in DoomDisplayResolution.allCases {
