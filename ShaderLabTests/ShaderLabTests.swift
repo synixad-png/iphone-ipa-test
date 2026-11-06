@@ -66,6 +66,22 @@ final class ShaderLabTests: XCTestCase {
         return false
     }
 
+    func testDoomNativeRendererDimensionsAndResponsiveLeftGesture() {
+        XCTAssertEqual(doom_bridge_width(), 640, "The engine must rasterize at true 640 pixels, not upscale a 320-pixel frame")
+        XCTAssertEqual(doom_bridge_height(), 400)
+        let start = CGPoint(x: 100, y: 100)
+        let idle = DoomGestureMovement.vector(from: start, to: start)
+        XCTAssertEqual(idle.dx, 0)
+        XCTAssertEqual(idle.dy, 0)
+        let right = DoomGestureMovement.vector(from: start, to: CGPoint(x: 104, y: 100))
+        XCTAssertGreaterThan(right.dx, 0.08, "Only 4pt travel should activate strafe")
+        let forward = DoomGestureMovement.vector(from: start, to: CGPoint(x: 100, y: 96))
+        XCTAssertGreaterThan(forward.dy, 0.08, "Only 4pt travel should activate forward")
+        let full = DoomGestureMovement.vector(from: start, to: CGPoint(x: 125, y: 75))
+        XCTAssertEqual(full.dx, 1, accuracy: 0.0001)
+        XCTAssertEqual(full.dy, 1, accuracy: 0.0001)
+    }
+
     func testDoomDisplayResolutionsAndFramebufferConversion() throws {
         let sizes = DoomDisplayResolution.allCases.map { ($0.width, $0.height) }
         XCTAssertEqual(sizes.map { $0.0 }, [160, 240, 320, 640, 1280])
