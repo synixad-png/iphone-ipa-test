@@ -86,7 +86,9 @@ final class ShaderLabTests: XCTestCase {
         let sizes = DoomDisplayResolution.allCases.map { ($0.width, $0.height) }
         XCTAssertEqual(sizes.map { $0.0 }, [160, 240, 320, 640, 1280])
         XCTAssertEqual(sizes.map { $0.1 }, [100, 150, 200, 400, 800])
-        let source = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 200)).image { context in
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 200), format: format).image { context in
             UIColor.systemRed.setFill()
             context.cgContext.fill(CGRect(x: 0, y: 0, width: 160, height: 200))
             UIColor.systemBlue.setFill()
@@ -235,7 +237,9 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(unpacked, 0, "Shareware ZIP must yield valid original WAD")
         guard unpacked == 0 else { return }
         XCTAssertEqual(wad.path.withCString { doom_bridge_start($0) }, 1)
-        var frame = [UInt32](repeating: 0, count: 320 * 200)
+        XCTAssertEqual(doom_bridge_width(), 640)
+        XCTAssertEqual(doom_bridge_height(), 400)
+        var frame = [UInt32](repeating: 0, count: Int(doom_bridge_width() * doom_bridge_height()))
         var displayed = false
         for _ in 0..<200 {
             if doom_bridge_status() < 0 { break }
