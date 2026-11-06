@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 import CoreGraphics
 import AVFoundation
 
-// DOOMGeneric's engine renders internally at a fixed 320 × 200 pixels.
-// These presets change the display framebuffer sampling, not engine detail.
+// Pinned doomgeneric is compiled to render world geometry at a real 640 × 400.
+// Lower and larger output sizes are resampling presets; 1280 is not native.
 enum DoomDisplayResolution: Int, CaseIterable, Identifiable {
     case minimum = 0, low, original, high, maximum
     var id: Int { rawValue }
@@ -22,7 +22,7 @@ enum DoomDisplayResolution: Int, CaseIterable, Identifiable {
     var title: String { "\(width) × \(height)" }
 
     static func convert(_ frame: CGImage, to preset: DoomDisplayResolution) -> UIImage {
-        if preset == .original { return UIImage(cgImage: frame) }
+        if preset == .high { return UIImage(cgImage: frame) }
         let size = CGSize(width: preset.width, height: preset.height)
         let format = UIGraphicsImageRendererFormat()
         format.opaque = true
@@ -57,7 +57,7 @@ struct DoomSharewareView: View {
     @State private var controllerPressed = Set<Int32>()
     @State private var controllerConnected = false
     @State private var controllerActive = false
-    @AppStorage("doom.display.resolution") private var displayResolution = DoomDisplayResolution.original.rawValue
+    @AppStorage("doom.display.resolution") private var displayResolution = DoomDisplayResolution.high.rawValue
     @AppStorage("doom.touch.mode") private var touchMode = "analog"
     @AppStorage("doom.touch.lookSensitivity") private var lookSensitivity: Double = 1.4
     @AppStorage("doom.touch.fireHorizontal") private var fireHorizontal: Double = 0.78
@@ -65,8 +65,8 @@ struct DoomSharewareView: View {
     @AppStorage("doom.sfx.enabled") private var effectsEnabled = true
     @AppStorage("doom.sfx.volume") private var effectsVolume: Double = 0.85
 
-    private let width = 320
-    private let height = 200
+    private let width = 640
+    private let height = 400
     private let poll = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
     private let downloadURL = URL(string: "https://www.doomarchive.com/ListFiles.php?ContentsFolderId=216&FolderId=216")!
     private let zipURL = URL(string: "https://www.jbserver.com/downloads/games/doom/misc/shareware/doom1.wad.zip")!
@@ -324,7 +324,7 @@ struct DoomSharewareView: View {
             }
             .pickerStyle(.menu)
             .accessibilityLabel("Rozdzielczość wyświetlanego obrazu DOOM")
-            Text("Od 160 × 100 do 1280 × 800. Klasyczny silnik DOOM renderuje scenę w 320 × 200; ustawienie zmienia próbkowanie i skalowanie obrazu, a nie szczegółowość geometrii. Możesz przełączać podczas gry.")
+            Text("Renderer DOOM generuje świat w rzeczywistej rozdzielczości 640 × 400 (więcej szczegółów niż oryginalne 320 × 200). Niższe tryby zmniejszają klatkę, a 1280 × 800 ją powiększa — bez dodatkowych detali. Zmienisz tryb również w pełnym ekranie.")
                 .font(.caption)
                 .foregroundStyle(LabStyle.muted)
             Divider().overlay(LabStyle.border)
