@@ -131,30 +131,44 @@ struct AsteroidsLandscapeView: View {
     }
 }
 
-// Input-only surfaces: no analogue graphics or synthetic center location.
+// Immediate, low-travel movement. The dead zone is measured in screen points,
+// not a percentage of a large virtual joystick radius; a 3 pt drag starts moving.
+enum DoomGestureMovement {
+    static func vector(from start: CGPoint, to current: CGPoint,
+                       travelForFullSpeed: CGFloat = 24) -> CGVector {
+        let deadZone: CGFloat = 2
+        func axis(_ delta: CGFloat) -> CGFloat {
+            let distance = abs(delta)
+            if distance <= deadZone { return 0 }
+            let strength = min(1, (distance - deadZone) / max(1, travelForFullSpeed - deadZone))
+            return delta < 0 ? -strength : strength
+        }
+        return CGVector(dx: axis(current.x - start.x), dy: axis(start.y - current.y))
+    }
+}
+
+// Input-only surface, as direct and continuous as the right-hand look gesture.
 struct DoomGestureMovementZone: View {
     let onVector: (CGVector) -> Void
     @State private var firstPoint: CGPoint?
 
     var body: some View {
-        GeometryReader { geometry in
-            Color.clear.contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                    .onChanged { value in
-                        if firstPoint == nil { firstPoint = value.startLocation }
-                        let origin = firstPoint ?? value.startLocation
-                        let radius = max(36, min(76, geometry.size.height * 0.26))
-                        let dx = (value.location.x - origin.x) / radius
-                        let dy = (origin.y - value.location.y) / radius
-                        func filtered(_ v: CGFloat) -> CGFloat {
-                            let magnitude = min(1, abs(v))
-                            return abs(v) < 0.12 ? 0 : (v > 0 ? 1 : -1) * (magnitude - 0.12) / 0.88
-                        }
-                        onVector(CGVector(dx: filtered(dx), dy: filtered(dy)))
-                    }
-                    .onEnded { _ in firstPoint = nil; onVector(.zero) })
-        }
-        .accessibilityLabel("Lewy obszar: ruch i krok w bok")
+        Color.clear.contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { value in
+                    if firstPoint == nil { firstPoint = value.startLocation }
+                    onVector(DoomGestureMovement.vector(from: firstPoint ?? value.startLocation,
+                                                         to: value.location))
+                }
+                .onEnded { _ in
+                    firstPoint = nil
+                    onVector(.zero)
+                })
+            .onDisappear {
+                firstPoint = nil
+                onVector(.zero)
+            }
+            .accessibilityLabel("Lewy obszar: szybki ruch i krok w bok")
     }
 }
 
