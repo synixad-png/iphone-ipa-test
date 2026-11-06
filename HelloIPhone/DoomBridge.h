@@ -9,6 +9,9 @@ int doom_bridge_extract_shareware_zip(const char *zip_path, const char *wad_path
 int doom_bridge_start(const char *wad_path);
 int doom_bridge_status(void);
 int doom_bridge_copy(uint32_t *destination, int maximum_pixels);
+// Actual native engine raster dimensions, NOT an iOS display scale.
+int doom_bridge_width(void);
+int doom_bridge_height(void);
 void doom_bridge_key(int code, int pressed);
 // Relative finger motion delivered as native Doom mouse events.
 void doom_bridge_look(float horizontal_delta);
