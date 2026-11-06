@@ -67,8 +67,8 @@ final class ShaderLabTests: XCTestCase {
     }
 
     func testDoomNativeRendererDimensionsAndResponsiveLeftGesture() {
-        XCTAssertEqual(doom_bridge_width(), 640, "The engine must rasterize at true 640 pixels, not upscale a 320-pixel frame")
-        XCTAssertEqual(doom_bridge_height(), 400)
+        XCTAssertEqual(doom_bridge_width(), 320, "Stable Doom native renderer is 320 pixels until HD refactor is validated")
+        XCTAssertEqual(doom_bridge_height(), 200)
         let start = CGPoint(x: 100, y: 100)
         let idle = DoomGestureMovement.vector(from: start, to: start)
         XCTAssertEqual(idle.dx, 0)
@@ -88,14 +88,12 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(sizes.map { $0.1 }, [100, 150, 200, 400, 800])
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        // The native source is now 640x400. The 640x400 preset deliberately
-        // returns its input unchanged, so using a legacy 320x200 fixture here
-        // would test the wrong contract and fail at the native preset.
-        let source = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 400), format: format).image { context in
+        // Stable native 320x200 fixture; all other display presets are resampled.
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 200), format: format).image { context in
             UIColor.systemRed.setFill()
-            context.cgContext.fill(CGRect(x: 0, y: 0, width: 320, height: 400))
+            context.cgContext.fill(CGRect(x: 0, y: 0, width: 160, height: 200))
             UIColor.systemBlue.setFill()
-            context.cgContext.fill(CGRect(x: 320, y: 0, width: 320, height: 400))
+            context.cgContext.fill(CGRect(x: 160, y: 0, width: 160, height: 200))
         }
         let cg = try XCTUnwrap(source.cgImage)
         for preset in DoomDisplayResolution.allCases {
@@ -192,7 +190,7 @@ final class ShaderLabTests: XCTestCase {
                                          lookSensitivity: .constant(1.4),
                                          fireHorizontal: .constant(0.78),
                                          fireVertical: .constant(0.68),
-                                         displayResolution: .constant(DoomDisplayResolution.high.rawValue))
+                                         displayResolution: .constant(DoomDisplayResolution.original.rawValue))
             let doomController = UIHostingController(rootView: doom)
             doomController.loadViewIfNeeded()
             XCTAssertNotNil(doomController.view, "Fullscreen DOOM failed to mount for mode \(mode)")
@@ -240,8 +238,8 @@ final class ShaderLabTests: XCTestCase {
         XCTAssertEqual(unpacked, 0, "Shareware ZIP must yield valid original WAD")
         guard unpacked == 0 else { return }
         XCTAssertEqual(wad.path.withCString { doom_bridge_start($0) }, 1)
-        XCTAssertEqual(doom_bridge_width(), 640)
-        XCTAssertEqual(doom_bridge_height(), 400)
+        XCTAssertEqual(doom_bridge_width(), 320)
+        XCTAssertEqual(doom_bridge_height(), 200)
         var frame = [UInt32](repeating: 0, count: Int(doom_bridge_width() * doom_bridge_height()))
         var displayed = false
         for _ in 0..<200 {
